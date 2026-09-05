@@ -1,0 +1,12 @@
+node_modules
+frontend/dist
+frontend/packages
+backend/data
+package-lock.json
+pnpm-lock.yaml
+.idea/
+.codegraph/
+.claude/skills/skill-creator
+.claude/skills/find-skills
+.claude/*.js
+memory/
