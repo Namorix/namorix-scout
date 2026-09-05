@@ -1,0 +1,27 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Namorix/namorix/refs/heads/main/catalog/schema/addon-v1.json",
+  "id": "namorix-scout",
+  "name": "Scout",
+  "description": "Smart camera monitoring for your home",
+  "version": "0.1.0",
+  "category": "media",
+  "icon": "https://raw.githubusercontent.com/Namorix/namorix-scout/refs/heads/main/assets/icon.svg",
+  "author": "IzeroCs",
+  "repo": "https://github.com/Namorix/namorix-scout",
+  "image": "namorix/namorix-scout:prod",
+  "imageTag": "prod",
+  "arch": ["amd64", "arm64"],
+
+  "ports": [
+    {
+      "container": 5302,
+      "protocol": "tcp",
+      "description": "Web frontend",
+      "entry": true
+    }
+  ],
+
+  "boot": "manual",
+  "minCoreVersion": "0.36.0",
+  "minServerVersion": "0.38.0"
+}
