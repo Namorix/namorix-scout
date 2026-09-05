@@ -1,0 +1,19 @@
+services:
+  namorix-scout:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ADDON_ID: ${ADDON_ID}
+        ADDON_FRONTEND_PORT: ${ADDON_FRONTEND_PORT}
+      additional_contexts:
+        - namorix=../../namorix
+    image: namorix/${ADDON_ID}:${IMAGE_TAG:-prod}
+    container_name: ${ADDON_ID}
+    network_mode: host
+    labels:
+      - "namorix-addon=true"
+      - "namorix-addon-id=${ADDON_ID}"
+      - "namorix-addon-name=${ADDON_NAME}"
+      - "namorix-addon-author=${ADDON_AUTHOR}"
+      - "namorix-addon-description=${ADDON_DESCRIPTION}"
