@@ -1,0 +1,22 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Namorix.Scout", "src\Namorix.Scout.csproj", "{06E165EE-852C-481E-8A4A-1CD9A65BED2E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Namorix.Core", "..\..\namorix\backend\src\Namorix.Core\Namorix.Core.csproj", "{D8EACA7E-A7C7-4635-B944-8096941745DC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{06E165EE-852C-481E-8A4A-1CD9A65BED2E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{06E165EE-852C-481E-8A4A-1CD9A65BED2E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{06E165EE-852C-481E-8A4A-1CD9A65BED2E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{06E165EE-852C-481E-8A4A-1CD9A65BED2E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D8EACA7E-A7C7-4635-B944-8096941745DC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D8EACA7E-A7C7-4635-B944-8096941745DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D8EACA7E-A7C7-4635-B944-8096941745DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D8EACA7E-A7C7-4635-B944-8096941745DC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
