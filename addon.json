@@ -8,8 +8,8 @@
   "icon": "https://raw.githubusercontent.com/Namorix/namorix-scout/refs/heads/main/assets/icon.svg",
   "author": "IzeroCs",
   "repo": "https://github.com/Namorix/namorix-scout",
-  "image": "namorix/namorix-scout:prod",
-  "imageTag": "prod",
+  "image": "namorix/namorix-scout:latest",
+  "imageTag": "latest",
   "arch": ["amd64", "arm64"],
 
   "ports": [
