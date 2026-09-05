@@ -7,6 +7,7 @@ using Namorix.Scout.Constants;
 using Namorix.Scout.Hubs;
 using Namorix.Scout.Persistence;
 using Namorix.Scout.Services;
+using Namorix.Scout.Streaming;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +23,7 @@ builder.Services.AddNamorixCore<ScoutHub>(builder.Environment.IsDevelopment(), o
 builder.Services.AddNmxOAuth2Client();
 builder.Services.AddAddonChannelClient();
 builder.Services.AddHostedService<ScoutService>();
+builder.Services.AddHostedService<RtspIngestService>();
 
 builder.Services.AddDevViteReverseProxy(builder.Environment, builder.Configuration);
 
