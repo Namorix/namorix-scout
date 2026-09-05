@@ -1,0 +1,38 @@
+{
+  "name": "namorix-scout",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "docker:prod": "docker compose down namorix-scout && docker compose up --build namorix-scout",
+    "docker:build": "docker compose build",
+    "docker:down": "docker compose down"
+  },
+  "dependencies": {
+    "@namorix/styles": "link:../../namorix/frontend/packages/styles",
+    "@namorix/ui": "link:../../namorix/frontend/packages/ui",
+    "@microsoft/signalr": "10.0.0",
+    "@reduxjs/toolkit": "2.12.0",
+    "@floating-ui/react": "0.27.20",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "react-redux": "9.3.0"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "1.15.4",
+    "@namorix/core": "link:../../namorix/frontend/packages/core",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "i18next": "26.2.0",
+    "prettier": "3.8.3",
+    "react-i18next": "17.0.8",
+    "react-router-dom": "7.15.1",
+    "sass-embedded": "1.100.0",
+    "typescript": "6.0.3",
+    "vite": "8.0.13"
+  }
+}
