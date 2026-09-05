@@ -3,7 +3,7 @@
   "id": "namorix-scout",
   "name": "Scout",
   "description": "Smart camera monitoring for your home",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "category": "media",
   "icon": "https://raw.githubusercontent.com/Namorix/namorix-scout/refs/heads/main/assets/icon.svg",
   "author": "IzeroCs",

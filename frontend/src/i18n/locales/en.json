@@ -1,5 +1,9 @@
 {
   "scout": {
-    "title": "Namorix Scout"
+    "title": "Namorix Scout",
+    "nav": {
+      "live": "Live",
+      "settings": "Settings"
+    }
   }
 }
