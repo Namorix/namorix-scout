@@ -14,7 +14,7 @@
 
   "ports": [
     {
-      "container": 5302,
+      "container": 5300,
       "protocol": "tcp",
       "description": "Web frontend",
       "entry": true
