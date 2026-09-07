@@ -4,6 +4,77 @@
     "nav": {
       "live": "Live",
       "settings": "Settings"
+    },
+    "cameras": {
+      "title": "Cameras",
+      "add": "Add camera",
+      "refresh": "Refresh",
+      "retry": "Retry",
+      "empty": "No cameras yet. Add your first camera to get started.",
+      "list": {
+        "status": "Status",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "url": "RTSP URL",
+        "stream": "Stream",
+        "record": "Recording",
+        "retention": "Retention (days)",
+        "recordOn": "On",
+        "recordOff": "Off",
+        "edit": "Edit",
+        "delete": "Delete"
+      },
+      "stream": {
+        "main": "Main",
+        "sub": "Sub"
+      },
+      "form": {
+        "addTitle": "Add camera",
+        "editTitle": "Edit camera",
+        "nameLabel": "Name",
+        "namePlaceholder": "e.g. Front door",
+        "urlLabel": "RTSP URL",
+        "urlPlaceholder": "rtsp://host:554/path",
+        "usernameLabel": "Username",
+        "usernamePlaceholder": "e.g. admin",
+        "passwordLabel": "Password",
+        "passwordPlaceholder": "Password",
+        "passwordHelper": "Leave blank to keep the stored credentials.",
+        "streamLabel": "Stream",
+        "enabledLabel": "Enabled",
+        "recordLabel": "Record continuously",
+        "retentionLabel": "Retention (days)",
+        "retentionPlaceholder": "7",
+        "save": "Save",
+        "cancel": "Cancel",
+        "saved": "Camera saved"
+      },
+      "delete": {
+        "title": "Delete camera",
+        "body": "Delete \"{{name}}\"? Its stored recordings are removed as well.",
+        "confirm": "Delete",
+        "success": "Camera deleted"
+      },
+      "errors": {
+        "nameRequired": "Camera name is required",
+        "retentionRange": "Retention must be between 1 and 365",
+        "cameraNotFound": "Camera not found",
+        "loadFailed": "Could not load cameras",
+        "passwordNeedsUser": "Username is required when a password is set"
+      }
+    },
+    "live": {
+      "title": "Live",
+      "empty": "No cameras connected yet. Add your first camera to start watching.",
+      "connecting": "Connecting",
+      "live": "Live",
+      "offline": "Offline",
+      "idle": "Stopped",
+      "play": "Play",
+      "stop": "Stop"
+    },
+    "errors": {
+      "generic": "Something went wrong"
     }
   }
 }

@@ -1,7 +1,10 @@
 import { configureStore } from "@reduxjs/toolkit"
+import { cameraReducer } from "./slices/cameraSlice"
 
 export const store = configureStore({
-  reducer: {},
+  reducer: {
+    cameras: cameraReducer,
+  },
 })
 
 export type RootState = ReturnType<typeof store.getState>

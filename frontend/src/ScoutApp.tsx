@@ -8,11 +8,14 @@ import {
   NmxIconFontSymbol,
   NmxLoadingOverlay,
   NmxTabProvider,
+  NmxToastProvider,
 } from "@namorix/ui"
 import type { NmxBottomNavigationBarItemData } from "@namorix/ui"
 import "./i18n"
-import { useAddonMode, useSessionGuard } from "@namorix/core"
+import { useSessionGuard } from "@namorix/core"
 import { store } from "./store/store"
+import { LiveView } from "./views/live/LiveView"
+import { SettingsView } from "./views/settings/SettingsView"
 
 type ScoutTab = "live" | "settings"
 
@@ -23,7 +26,6 @@ const TABS: NmxBottomNavigationBarItemData[] = [
 
 export const ScoutApp: React.FC = () => {
   const { t } = useTranslation()
-  const addonMode = useAddonMode()
   const guard = useSessionGuard()
 
   if (guard === "loading") return <NmxLoadingOverlay />
@@ -32,16 +34,17 @@ export const ScoutApp: React.FC = () => {
   return (
     <Provider store={store}>
       <NmxAddonRoot>
+        <NmxToastProvider />
         <NmxTabProvider defaultTab="live">
           <NmxBottomNavigationContent<ScoutTab>
             tabKey="live"
             spacingHorizontalDisabled
             spacingVerticalDisabled
           >
-            <h1>LiveView · {addonMode}</h1>
+            <LiveView />
           </NmxBottomNavigationContent>
           <NmxBottomNavigationContent<ScoutTab> tabKey="settings">
-            <h1>SettingsView · {addonMode}</h1>
+            <SettingsView />
           </NmxBottomNavigationContent>
           <NmxBottomNavigationBar items={TABS} t={t} />
         </NmxTabProvider>
