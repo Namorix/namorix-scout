@@ -1,4 +1,7 @@
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Namorix.Core.AddonSession;
 using Namorix.Core.Extensions;
 using Namorix.Core.Grpc;
@@ -23,7 +26,9 @@ builder.Services.AddNamorixCore<ScoutHub>(builder.Environment.IsDevelopment(), o
 builder.Services.AddNmxOAuth2Client();
 builder.Services.AddAddonChannelClient();
 builder.Services.AddHostedService<ScoutService>();
-builder.Services.AddHostedService<RtspIngestService>();
+builder.Services.AddSingleton<RtspIngestService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<RtspIngestService>());
+builder.Services.AddSingleton<WebRtcRelayService>();
 
 builder.Services.AddDevViteReverseProxy(builder.Environment, builder.Configuration);
 
@@ -32,15 +37,33 @@ builder.Services.AddAddonSessionAuth<ScoutDbContext>(o =>
 
 var dbPath = Path.Combine(addon.DataDir, "scout.db");
 
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(addon.DataDir, "keys")));
+builder.Services.AddSingleton<ScoutSecretProtector>();
+builder.Services.AddSingleton<CameraService>();
+
 builder.Services.AddDbContextFactory<ScoutDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 
 var app = builder.Build();
 
+var publicRoot = Path.Combine(app.Environment.ContentRootPath, "public");
+
 app.UseNamorixCore<ScoutHub>(
     configurePipeline: a =>
     {
         a.UseChromeDevToolsProbe404();
+        if (!builder.Environment.IsDevelopment() && Directory.Exists(publicRoot))
+        {
+            a.UseDefaultFiles(new DefaultFilesOptions
+            {
+                FileProvider = new PhysicalFileProvider(publicRoot)
+            });
+            a.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(publicRoot)
+            });
+        }
         a.UseAddonSessionAuth();
     },
     configureEndpoints: e =>
