@@ -9,7 +9,11 @@ isProject: false
 
 ## Trạng thái
 
-🟢 **Phase 1 ✅ XONG** (2026-09-05) — ingest spike chạy với camera thật; SharpRTSP giữ (G1 đóng). Backend có `RtspIngestService` (handshake + Digest auth, reconnect, log NAL stats). Frontend Live/Settings vẫn placeholder — **Phase 2 (Camera CRUD) làm tiếp**.
+🟢 **Phase 1 ✅ XONG** (2026-09-05) — ingest spike chạy với camera thật; SharpRTSP giữ (G1 đóng). Backend có `RtspIngestService` (handshake + Digest auth, reconnect, log NAL stats). Frontend Live/Settings vẫn placeholder.
+
+🟢 **Phase 2 ✅ IMPLEMENTED** (2026-09-07) — Camera domain + CRUD API (`ScCamera`, migration `20260907071530_AddCameras`, `CameraService` + DataProtection cred, `CamerasController` REST `/api/cameras`). G6 đóng: tách userinfo khỏi URL + mã hoá `RtspCredentials` ở cột riêng. Verify CRUD smoke do owner chốt.
+
+🟢 **Phase 3 ✅ XONG** (2026-09-07) — Camera manager UI đặt trên tab **Live** (không phải Settings — user redirect). CRUD add/edit/delete camera qua form `NmxAlertDialog`, list grid card + delete confirm; Redux `cameraSlice` + hook `useCameras`; kết quả/lỗi hiện qua toast. Fix `nmxToast`: mount `<NmxToastProvider/>` trong `ScoutApp` (addon bundle `@namorix/core` riêng → host provider không nghe bus addon). Nâng cấp sau: creds nhập qua field **Username/Password** riêng (backend `CameraUpsertRequest` + `ScCameraDto.Username`, prefill khi edit, password không trả về) + fix SQLite `DateTimeOffset` ORDER BY. Verify: `pnpm dev` + `make run`, thêm/sửa/xoá camera, toast hiện. Bump 0.4.0 (batch gộp Phase 3+4+5) + memory bank đã cập nhật.
 
 ## Mục tiêu
 
@@ -61,9 +65,9 @@ Controllers/CamerasController.cs · TimelineController.cs (or Streaming/Playback
 |-------|-----|-------|---------------|---------|
 | **1** | Ingest prototype (spike) | backend | log NAL units từ camera thật | — (không bump) |
 | **2** | Camera domain + CRUD API | backend | `GET/POST/PUT/DELETE /api/cameras` + migration | — |
-| **3** | Settings tab: add/manage camera | frontend | nhập name + RTSP URL, lưu được | 0.3.0 |
+| **3** | Live tab: add/manage camera | frontend | CRUD camera qua UI trên tab Live (form dialog + list card + toast) | 0.3.0 |
 | **4** | WebRTC live spike | backend | 1 camera hiện qua peer (Chrome) | — |
-| **5** | Live view | frontend | tab Live hiện stream, đa camera grid | 0.4.0 |
+| **5** | Live view | frontend | tab Live hiện stream, đa camera grid | 0.4.0 ✅ XONG |
 | **6** | Recording writer (fMP4) | backend | ghi segment, crash-safe flush, retention | — |
 | **7** | Recording index + timeline + playback API | backend | `/timeline` + range-request MP4 | 0.5.0 |
 | **8** | Playback + timeline UI | frontend | xem lại bản ghi theo ngày | 0.6.0 |
@@ -89,48 +93,65 @@ Bump theo rule skill update-docs-and-versions: **chỉ bump khi behavior Desktop
 
 **Kết quả (owner chạy 2026-09-05):** Hikvision `192.168.31.161` (subtype=0, H.264 High L4.0 qua `profile-level-id=4D4028`) — Digest auth chạy, SETUP/PLAY OK; RTP ~2 MB/5s ≈ 3900–4500 kbps, ~25 fps, SPS≈PPS≈2–3 mỗi window (bằng nhau → đếm STAP-A đúng). Sau code review sửa 3 điểm: (1) **STAP-A** giờ loop qua tất cả NAL gộp, không chỉ lấy NAL đầu (camera hay gộp SPS+PPS trong 1 gói lúc đầu GOP); (2) gửi **TEARDOWN best-effort** trong `finally` trước khi đóng socket — tránh camera giữ session kẹt khi reconnect; (3) **Authorization gắn sẵn trước khi gửi** khi `_auth` đã có — chỉ OPTIONS bị 401 một lần, DESCRIBE/SETUP/PLAY sau đi thẳng, hết double round-trip. **Defer có chủ đích:** parse SPS để log resolution width×height (item #4), xử lý FU-B NAL 29 (#5 — không dùng thực tế).
 
-⚠ **Open (security):** URL thật kèm password đang nằm trong `backend/src/appsettings.json` — file **tracked**. Trước khi commit Phase 2: bỏ URL khỏi đó, set qua env `RtspSpike__Url`; đồng thời xoá key `RtspSpike__Url: ""` cũ trong `launchSettings.json` profile `http` (đang ghi đè appsettings thành rỗng khi `dotnet run`).
+⚠ **Security (dev-local):** URL spike thật kèm pass đặt trong `backend/src/Properties/launchSettings.json` profile `http` (`RtspSpike__Url`) — **working tree, chưa commit**; `appsettings.json` giữ `RtspSpike:Url: ""`. Giữ dev-local, đừng commit. Kể từ Phase 3 camera vào DB qua UI — cred tách userinfo + mã hoá DataProtection (G6).
 
 ---
 
-## Phase 2 — Camera domain + CRUD API — backend
+## Phase 2 — Camera domain + CRUD API — backend — 🟢 IMPLEMENTED (2026-09-07)
 
-**Mục đích:** có entity `ScCamera` để Phase 3 (Settings) và Phase 6 (recording nền) dựa vào.
+**Mục đích (đạt):** có entity `ScCamera` + CRUD REST để Phase 3 (Settings UI) và Phase 6 (recording nền) dựa vào.
 
-**Files:**
-- `backend/src/Models/ScCamera.cs` — theo Rule 11: class `PascalCase`. Fields đề xuất:
-  - `Guid Id`, `string Name`, `string RtspUrl` (hoặc tách `RtspUrl` + cred riêng — chốt ở G6), `CameraStreamType StreamType` (main/sub enum), `bool Enabled`, `bool RecordEnabled`, `int RetentionDays` (mặc định 7), `DateTimeOffset CreatedAt`.
-- `backend/src/Persistence/ScoutDbContext.cs` — thêm `DbSet<ScCamera>`; migration mới qua `make db-init-create` + `db-update`.
-- `backend/src/Controllers/CamerasController.cs` — REST CRUD theo convention namorix (mutation = REST, SignalR chỉ push):
-  - `GET /api/cameras` (list), `GET /api/cameras/{id}`, `POST /api/cameras`, `PUT /api/cameras/{id}`, `DELETE /api/cameras/{id}`.
-  - Auth: controller chạy sau `UseAddonSessionAuth` pipeline → tự được bảo vệ. **Không bao giờ trả RTSP cred về response** (redact url → chỉ `rtsp://host:port/path` hoặc flag `hasCredentials`).
-- `backend/src/Constants/ScoutSignalR.cs` — thêm hằng số event camera: `camera:updated`, `camera:deleted`, `camera:state` (online/offline) — dùng `SignalRPath` prefix như `/hubs/scout`.
+**Files (`backend/src/`):**
+- `Models/ScCamera.cs` + `Models/Enums.cs` — `Guid Id`, `Name`, `RtspUrl` (**sanitized**, bỏ userinfo), `RtspCredentials?` (user:pass mã hoá, không bao giờ trả về), `CameraStreamType` (Main/Sub, lưu string), `Enabled`, `RecordEnabled`, `RetentionDays` (mặc định 7), `DateTimeOffset CreatedAt`.
+- `Services/ScoutSecretProtector.cs` — DataProtection purpose `Scout.CameraCredentials`; key ring `{DataDir}/keys`.
+- `Services/CameraService.cs` — CRUD qua `IDbContextFactory`; parse `rtsp[s]://user:pass@host/path`, tách userinfo, `Protect` trước khi lưu; map DTO.
+- `Controllers/CamerasController.cs` — `[RequireAuth]` + `[Route("api/cameras")]`: `GET /`, `GET /{id:guid}`, `POST`, `PUT/{id:guid}`, `DELETE/{id:guid}`. 400 `INVALID_CAMERA_INPUT`, 404 `CAMERA_NOT_FOUND`, wrap `ApiResponse.Ok/Fail`.
+- `Persistence/ScoutDbContext.cs` — `DbSet<ScCamera>` + enum→string; migration **`20260907071530_AddCameras`** (đã chạy).
+- `Constants/ScoutSignalR.cs` — `ScoutSignalREvents` (`scout:camera-changed`/`camera-deleted`) — contract Phase 3; `Constants/Error.cs` — `CAMERA_NOT_FOUND`, `INVALID_CAMERA_INPUT`.
+- `Program.cs` — `AddDataProtection().PersistKeysToFileSystem({DataDir}/keys)` + DI `ScoutSecretProtector`/`CameraService`.
 
-**Verify (owner chạy):** `make build`; smoke qua swagger/curl CRUD camera giả.
+**G6 — ĐÃ ĐÓNG:** tách cred khỏi URL. Response chỉ có `rtspUrl` sanitized + `hasCredentials`; pass nằm cột `RtspCredentials` mã hoá DataProtection. (Key ring mới → lần chạy đầu có thể phải login lại desktop.)
 
----
-
-## Phase 3 — Settings tab: add/manage camera — frontend
-
-**Mục đích:** user nhập camera qua UI (thay vì sửa config). Live tab giữ placeholder.
-
-**Files:**
-- `frontend/src/controllers/cameras.controller.ts` — gọi REST qua `coreConfig.http` (pattern weave `network.controller.ts`): `list/create/update/delete`.
-- `frontend/src/views/SettingsView.tsx` — form thêm/sửa camera (name + RTSP URL + toggle Enabled/Record + retention), danh sách camera có nút edit/delete/xoá; dùng `@namorix/ui` primitives, `formatApiError` cho lỗi (Rule 7).
-- `frontend/src/views/LiveView.tsx` — vẫn placeholder `<h1>` phase này (chỉ tách file sẵn sàng).
-- `frontend/src/store/slices/camerasSlice.ts` + selectors — state `byId`/`order` (Rule 5 store pattern); hook `useCameras.ts`.
-- `frontend/src/i18n/locales/en.json` — `scout.cameras.*`, `scout.settings.*`, errors; vi.json bỏ trống (fallback en).
-- `ScoutApp.tsx` — route Live → `LiveView`, Settings → `SettingsView`.
-
-**Security:** URL nhập có `rtsp://user:pass@` — chỉ gửi lên backend, không log; display đã redact.
-
-**Verify (owner):** `pnpm dev` + `make run` → tab Settings thêm camera, list hiện, không log cred.
+**Verify còn lại (owner):** `make build` + smoke CRUD (POST/GET/PUT/DELETE camera giả qua swagger/curl) rồi xác nhận — chưa mark ✅ gate.
 
 ---
 
-## Phase 4 — WebRTC live spike — backend
+## Phase 3 — Live tab: add/manage camera — frontend — 🟢 XONG (2026-09-07)
+
+**Mục đích (đạt):** user nhập/quản lý camera qua UI (thay vì sửa config). **Thay đổi so với roadmap:** camera manager đặt trên tab **Live**, không phải Settings — user redirect ("Add camera thì cho ở live view chứ để ở setting làm gì, Settings để tạm vậy thôi"); Settings giữ placeholder.
+
+**Files (`frontend/src/`):**
+- `types/camera.ts` — `Camera` (id, name, `rtspUrl` sanitized, `streamType` main/sub, enabled, recordEnabled, retentionDays, hasCredentials, `username`, createdAt) + `CameraUpsert` (kèm `username`/`password`).
+- `scoutApiRoutes.ts` — `ScoutApiRoutes.cameras` / `cameraById(id)` (`API_BASE + "/cameras"`).
+- `controllers/camera.controller.ts` — `list/get/create/update/remove` qua `coreConfig.http` (pattern weave `network.controller.ts`); non-success → `throw ApiError.fromResponse`.
+- `store/slices/cameraSlice.ts` + `store/selectors/cameraSelectors.ts` — state normalized `byId`/`order` (Rule 5); actions `setCameras`/`upsertCamera`/`removeCamera`.
+- `hooks/useCameras.ts` — load list khi mount + `refresh` (try/catch → `loadFailed`).
+- `views/live/LiveView.tsx` — toolbar Add camera (`NmxButton` + ADD icon) + `NmxButtonRefresh`; grid `NmxCard` (badge enabled/disabled, url, stream, record, retention) + footer Edit/Delete; `renderEmpty()` (loadFailed → Retry); form + delete dialog.
+- `views/live/CameraFormDialog.tsx` — add/edit form trong **`NmxAlertDialog`** (không dùng `NmxDialog` raw — user hỏi "có NmxAlertDialog sao lại dùng NmxDialog"): name + RTSP URL (chỉ host/path) + **Username** (prefill `camera.username` khi edit) + **Password** (`type=password`, luôn để trống) + `NmxSelect` stream + retention + toggle Enabled/Record; validate name required + retention 1..365 + password có mà username trống → toast lỗi; submit `create`/`update` → `onSaved` → toast.
+- `views/live/CameraErrorCodes.ts` — map `CAMERA_NOT_FOUND` → i18n (`formatCustomError`).
+- `views/settings/SettingsView.tsx` — placeholder `<h1>` (redirect về Live).
+- `ScoutApp.tsx` — mount `<NmxToastProvider/>` + route Live → `LiveView`, Settings → `SettingsView`.
+- `i18n/locales/en.json` — `scout.cameras.*` (list/form/delete/errors) + `scout.live.empty`; vi.json trống (fallback en).
+
+**Toast fix (`nmxToast` không hiện):** `nmxToast` trong `@namorix/core` là **event bus** — chỉ emit, không tự render. `NmxToastProvider` trước chỉ mount ở desktop host `Root.tsx`; scout bundle `@namorix/core` riêng (MF `shared` chỉ react/i18next/react-dom/react-i18next) → bus addon không ai nghe ở cả standalone lẫn widget. Giải pháp: mount `<NmxToastProvider/>` ngay trong `ScoutApp` (bên trong `NmxAddonRoot`). Host và addon dùng bus khác instance nên không lo toast trùng.
+
+**Creds tách field (backend + frontend):** người dùng không còn gõ `user:pass@` trong URL. `Dtos/CameraDtos.cs` — `CameraUpsertRequest` + `Username?`/`Password?`; `ScCameraDto` + `Username?` (giải mã creds qua `ScoutSecretProtector.Unprotect`, lấy phần trước `:` — password không bao giờ trả về, `ReadUsername` bọc try/catch). `CameraService.ResolveCredentials`: nhập user+pass → mã hoá creds `{user}:{pass}` mới; **password để trống → giữ creds cũ** (create = không auth); password có mà thiếu username → 400 `INVALID_CAMERA_INPUT`. Vẫn nhận URL dán kèm creds (fallback cũ). Giới hạn: chưa có cách **xoá** creds đã lưu.
+
+**Bug fix (backend):** `GET /api/cameras` văng `NotSupportedException` — SQLite không translate `OrderBy(c.CreatedAt)` (DateTimeOffset). Fix: `ListAsync` lấy list rồi order client-side (`cameras.OrderBy(...).Select(ToDto)`).
+
+**Security:** creds chỉ nằm field Username/Password → gửi lên backend, không log; API trả `rtspUrl` đã redact + `hasCredentials` + `username` (không bao giờ password).
+
+**Verify (owner, đã xác nhận 2026-09-07):** `pnpm dev` + `make run` → tab Live thêm/sửa/xoá camera, list hiện; toast success/error hiện sau fix; edit camera có creds thấy username prefill.
+
+---
+
+## Phase 4 — WebRTC live spike — backend — ✅ XONG (2026-09-07)
 
 **Mục đích:** chứng minh NAL → SIPSorcery passthrough với 1 camera thật — **đoạn ít tài liệu nhất**, smoke test cross-browser sớm (G5).
+
+✅ **4a — DB-driven ingest (2026-09-07, xong):** `RtspIngestService` giờ là registry reconcile camera **enabled** từ `ScCamera` mỗi 5s (bỏ `RtspSpike:Url` khỏi `appsettings.json`/`launchSettings.json` — hết cred trong config; cred giải mã qua `ScoutSecretProtector.Unprotect(RtspCredentials)`). Bóc nested `RtspSession` → `CameraRtspClient.cs` (giữ nguyên handshake/Digest/reconnect/TEARDOWN, thêm connect timeout 5s + luôn strip userinfo khỏi request-uri). Thêm `H264Depacketizer.cs` — NAL reassembly chuẩn RFC 6184 (single/STAP-A/FU-A/FU-B) gom theo RTP marker bit → `VideoFrame` (list NAL + keyframe + timestamp) phát qua event `FrameReceived`; `H264CodecSnapshot` (SPS/PPS, `profile-level-id`, `sprop-parameter-sets` base64) cache để WebRTC dùng cho SDP fmtp. SIPSorcery **10.0.16** đã thêm vào csproj.
+
+✅ **4b — WebRTC signaling + live-test page (2026-09-07, code + build xong):** backend là **offerer**, browser answer + trickle ICE qua REST. Files: `Streaming/H264RtpPacketizer.cs` (single-NAL khi ≤1200 bytes, còn lại FU-A RFC 6184; marker bit ở packet cuối), `Streaming/WebRtcRelayService.cs` (+ `RtcViewerSession`: `RTCPeerConnection`, `MediaStreamTrack`/`VideoFormat(H264)` send-only, parse payload type từ offer `a=rtpmap`, subscribe `FrameReceived` khi connection `connected`, gate send bằng `SendRtpRaw(video, payload, rtpTimestamp, marker, pt)`), `Controllers/StreamsController.cs` (`POST {camera}/offer` → `{sessionId,sdp,payloadType}`, `POST {session}/answer`, `POST {session}/ice`, `GET {session}/ice` drain, `DELETE {session}`), `Dtos/StreamDtos.cs`, `Constants/Error.cs` (+`CameraOffline/StreamNotFound/StreamOfferFailed/StreamAnswerFailed/InvalidStreamInput`), `Program.cs` DI (`AddSingleton<RtspIngestService>` + `AddHostedService(factory)` để relay inject cùng instance). SPS/PPS in-band mỗi GOP (fmtp sprop defer v1); viewer đợi ≤1 GOP cho keyframe đầu. Test page `frontend/public/live-test.html` (`?camera=<guid>`): offer → answer → trickle `pc.onicecandidate` lên `POST /ice` + poll `GET /ice`, log connection state → video khi có keyframe. **Build pass sau 2 round fix compile** — API SIPSorcery 10.0.16 xác nhận qua chính compiler: `createOffer()`/`createAnswer()` **sync** trả `RTCSessionDescriptionInit`; `setLocalDescription` **async**; `setRemoteDescription(RTCSessionDescriptionInit)` **sync trả `SetDescriptionResultEnum`** (không await được) → `ApplyAnswer`/`SetRemoteAnswer` sync; `addIceCandidate` trả **void**; `RTCPeerConnectionState.@new/connecting/closed` tồn tại. Còn lại sửa warning: `RtcOffer` record → class `init` (JSON đọc qua reflection nên record gây "positional property never accessed"), `CloseAsync` bỏ `async` (không await) trả `Task.CompletedTask`, 2 `catch{}` rỗng thêm log, `Find` hạ `internal` (không expose `RtcViewerSession` internal qua public). **Verify (owner, 2026-09-07):** video thật lên Chrome qua tab Live sau khi sửa `VideoFormat` payload type (xem Phase 5) — `live-test.html` cũng thành công. **Gate G5 chưa test Safari** (H.264 passthrough cross-browser — theo dõi khi test Safari).
 
 **Files:**
 - `backend/src/Namorix.Scout.csproj` — thêm **SIPSorcery**.
@@ -145,19 +166,28 @@ Bump theo rule skill update-docs-and-versions: **chỉ bump khi behavior Desktop
 
 ---
 
-## Phase 5 — Live view — frontend
+## Phase 5 — Live view — frontend — ✅ XONG (2026-09-07)
 
-**Mục đích:** tab Live hiện camera thật. Full-bleed (đã setup `spacing*Disabled`), nhiều camera = grid.
+**Mục đích (đạt):** tab Live hiện camera thật qua WebRTC, đa camera grid. **User redirect:** không làm manager ở Settings mà **giữ nguyên camera CRUD manager ngay trên tab Live** (toolbar Add/Refresh + card grid), Live/Settings placeholder vẫn tách — camera manager là chức năng của Live view. **User chốt layout:** lưới **thuần nhất** (bỏ khái niệm main-stage lớn + grid phụ ban đầu).
 
-**Files:**
-- `frontend/src/views/LiveView.tsx` — grid camera; mỗi card = `<video>` + play/stop + state (live/connecting/offline); 1 camera chính lớn + các camera phụ nhỏ (Surveillance-style).
-- `frontend/src/signalr/` + `hooks/useCameraStream.ts` — nhận SDP qua REST, gắn stream vào `video.srcObject`; nghe `camera:state` online/offline.
-- `frontend/src/controllers/streams.controller.ts` — offer/stop.
-- SignalR camera events constants phía frontend (mirror backend `ScoutSignalR`).
-- **Lưu ý kiến trúc:** `NmxBottomNavigationContent` giữ tab hidden **mounted** → stream WebRTC không restart khi chuyển tab (lý do đã chọn primitives này).
-- i18n `scout.live.*`.
+**Frontend self-derive stream state — KHÔNG dùng SignalR:** backend hiện không push `scout:camera-*` state event (chỉ định nghĩa constants) → Phase 5 suy live/connecting/offline/idle từ chính session stream, không có nguồn sự kiện backend.
 
-**Verify (owner):** tab Live xem được camera; chuyển Settings↔Live stream không ngắt.
+**Files (`frontend/src/`):**
+- `scoutApiRoutes.ts` — `ScoutApiRoutes.streams` (`offer/answer/ice/stop` theo `STREAMS_BASE = API_BASE + "/streams"`).
+- `controllers/streams.controller.ts` — `StreamOffer`/`StreamIceList`; `offer/answer/iceAdd/iceList/stop` qua `coreConfig.http`; non-success → `throw ApiError.fromResponse`.
+- `streaming/RtcStreamClient.ts` — **browser WebRTC glue** (tái sử dụng REST signaling của `live-test.html` 4b): `RtcStreamClient` class quản lý vòng đời session (`runId` + `disposed` → callback race-safe). Flow: `offer(cameraId)` → `RTCPeerConnection({iceServers:[]})` + `addTransceiver("video", recvonly)` → `setRemoteDescription(offer)` → `createAnswer` → `setLocalDescription` → chờ ICE gathering (5s) → `POST answer` → poll server ICE mỗi **250ms** (drain `GET /ice` → `addIceCandidate`; trickle candidate browser lên `POST /ice` qua `onicecandidate`) → connected/completed hoặc timeout **20s** → `fail(reason)`. `StreamStatus {state: idle|connecting|live|offline, reason, stream}`; `StreamState` map từ trạng thái session; `fail`/`stop` gọi `DELETE session` + đóng peer.
+- `hooks/useLiveStreams.ts` — 1 session WebRTC per camera (`entriesRef` Map), **auto-play camera enabled** khi reconcile theo `signature` (danh sách enabled id), hủy session khi camera bị disable/xoá; `play(id)`/`stop(id)` manual (play thay session mới nếu có). Camera disabled không auto-phát nhưng bấm Play được bằng tay.
+- `views/live/StreamVideo.tsx` — `<video muted autoPlay playsInline>` gắn `srcObject` từ `MediaStream`.
+- `views/live/LiveView.tsx` — toolbar (Add camera + `NmxButtonRefresh`) + **`NmxGrid minColWidth={320}` auto-fit thuần nhất** (mọi camera là card bằng nhau — 1 camera stretch full-width, 2+ tự chia cột); card = `CameraLiveCard`; CRUD + delete-confirm + `renderEmpty()` giữ nguyên từ Phase 3.
+- `views/live/CameraLiveCard.tsx` — overlay status-only (spinner khi connecting, text Live/Connecting/Offline/Disabled/Stopped khi không live); actions: **Stop** (semantic error) khi live, **Play** khi idle/disabled/offline (disable khi connecting), Edit, Delete.
+- `views/live/LiveView.scss` — `.scout-live-card` flex column surface-low + 16/9 video `object-fit: contain`.
+- `i18n/locales/en.json` — `scout.live.*` (`connecting/live/offline/idle/play/stop`).
+
+**Bug fix runtime (STREAM_OFFER_FAILED 400) — SIPSorcery `VideoFormat` ctor:** `new(VideoCodecsEnum.H264, fmtID, clockRate, parameters)` — **formatID là payload type RTP (0–127), clockRate H264 = 90000**. Lỗi 1 "clock rate > 0" khi truyền clock 0; lỗi 2 "format ID exceeded 127" khi nhầm tham số giữa là clock. **Fix:** `new(VideoCodecsEnum.H264, 96, 90_000, "packetization-mode=1")` → offer SDP `a=rtpmap:96 H264/90000` (regex `_h264Rtpmap` vẫn bắt payload type 96 để gửi RTP).
+
+**Verify (owner, đã xác nhận 2026-09-07):** `pnpm dev` + `make run` → tab Live video camera hiện qua WebRTC sau fix payload type; camera enabled auto-play, đa camera grid.
+
+**Còn lại / follow-up:** reason lỗi (`stream-offline`/`connection-lost`/`timeout`) chưa hiển thị trên card (chưa có i18n map + UI line); SignalR push `scout:camera-state` (online/offline từ ingest) là follow-up backend — hiện self-derive phía client.
 
 ---
 

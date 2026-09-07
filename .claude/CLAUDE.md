@@ -81,9 +81,9 @@ cd frontend && pnpm docker:prod   # docker compose down && up --build
 
 `frontend/.env`: `ADDON_FRONTEND_PORT=5302`, `ADDON_BACKEND_PORT=5300`, `ADDON_HOST=http://localhost`. Dev server proxies `/.well-known` to the backend. `@namorix/ui`/`@namorix/styles` point at package **source** (`main: ./src/index.ts`) — no rebuild needed to consume new primitives.
 
-## Current Status (v0.2.0)
+## Current Status (v0.4.0)
 
-Bottom-nav scaffold shell. Frontend (`ScoutApp`) shows a **bottom navigation** (Live / Settings — Live = camera view, full-bleed; Settings = config placeholder) inside `NmxAddonRoot` + `NmxTabProvider`. Backend is a plain session-auth addon skeleton (`ScoutService` gRPC ready ping, `ScoutHub` `/hubs/scout`, `ScoutDbContext` empty, cookie `nmx_scout_session`). No camera logic yet. The RTSP→WebRTC→fMP4 streaming design is decided but **not implemented** — first real work is the backend camera ingest spike.
+Camera live pipeline qua Phases 1–5. Backend: session-auth skeleton (`ScoutService` gRPC ready ping, `ScoutHub` `/hubs/scout`, cookie `nmx_scout_session`) + `ScCamera` CRUD REST `/api/cameras` (cred tách userinfo, mã hoá DataProtection — không trả pass) + ingest: `RtspIngestService` reconcile camera enabled mỗi 5s → `CameraRtspClient` (SharpRTSP) → `H264Depacketizer` (NAL frames) → `WebRtcRelayService` (SIPSorcery) relay, signaling REST `/api/streams/*`. Frontend (`ScoutApp` bottom-nav Live/Settings, `NmxAddonRoot` + `NmxTabProvider`): tab **Live** = camera manager UI (add/edit/delete `NmxAlertDialog` + toast) + live view WebRTC grid (`NmxGrid`, `RtcStreamClient`, per-camera session, auto-play camera enabled, state self-derive phía client — chưa SignalR push); Settings placeholder. Chưa làm: recording (Phase 6 fMP4), timeline/playback (7–8), motion (9).
 
 ---
 
