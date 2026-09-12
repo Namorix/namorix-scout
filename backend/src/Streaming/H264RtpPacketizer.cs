@@ -11,7 +11,7 @@ internal static class H264RtpPacketizer
 
         if (nal.Length <= maxPayloadBytes)
         {
-            packets.Add(nal.ToArray());
+            packets.Add([.. nal]);
             return;
         }
 
