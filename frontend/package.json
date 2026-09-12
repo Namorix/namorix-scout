@@ -12,16 +12,20 @@
     "docker:down": "docker compose down"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "@floating-ui/react": "0.27.20",
+    "@microsoft/signalr": "10.0.0",
     "@namorix/styles": "link:../../namorix/frontend/packages/styles",
     "@namorix/ui": "link:../../namorix/frontend/packages/ui",
-    "@microsoft/signalr": "10.0.0",
     "@reduxjs/toolkit": "2.12.0",
-    "@floating-ui/react": "0.27.20",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-redux": "9.3.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.1",
     "@module-federation/vite": "1.15.4",
     "@namorix/core": "link:../../namorix/frontend/packages/core",
     "@types/react": "19.2.14",
