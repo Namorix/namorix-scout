@@ -33,7 +33,12 @@ internal sealed class H264Depacketizer(Action<VideoFrame> onFrame)
 
         ParsePayload(rtp[offset..]);
 
-        if (!marker || _nals.Count == 0)
+        // Some cameras terminate SPS-only and PPS-only RTP units with the marker
+        // bit before sending the slice as a separate marker-terminated unit under
+        // the same timestamp. Emitting each of those as its own frame yields
+        // duplicate-timestamp access units and the picture never decodes, so an
+        // access unit is only complete once it carries slice (VCL) data.
+        if (!marker || _nals.Count == 0 || !HasVclData())
             return;
 
         var nals = _nals.ToArray();
@@ -110,5 +115,16 @@ internal sealed class H264Depacketizer(Action<VideoFrame> onFrame)
     {
         if (nal.Length > 0)
             _nals.Add(nal);
+    }
+
+    private bool HasVclData()
+    {
+        foreach (var nal in _nals)
+        {
+            if ((nal[0] & 0x1F) is >= 1 and <= 5)
+                return true;
+        }
+
+        return false;
     }
 }
