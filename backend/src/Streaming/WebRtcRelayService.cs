@@ -94,10 +94,15 @@ internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
         var peer = new RTCPeerConnection(null);
         _peer = peer;
 
+        var codec = camera.GetCodec();
+        var fmtp = codec is null
+            ? "packetization-mode=1;profile-level-id=42e01f"
+            : $"packetization-mode=1;profile-level-id={codec.ProfileLevelId}";
+
         var track = new MediaStreamTrack(
             new List<VideoFormat>
             {
-                new(VideoCodecsEnum.H264, 96, 90_000, "packetization-mode=1"),
+                new(VideoCodecsEnum.H264, 96, 90_000, fmtp),
             },
             MediaStreamStatusEnum.SendOnly);
         peer.addTrack(track);
