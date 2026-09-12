@@ -20,7 +20,7 @@ RUN printf 'packages:\n  - "packages/*"\nallowBuilds:\n  esbuild: true\n  "@parc
     && pnpm install
 
 WORKDIR /repo/namorix-scout/frontend
-RUN printf 'allowBuilds:\n  esbuild: true\n  "@parcel/watcher": true\n' > pnpm-workspace.yaml
+RUN printf 'allowBuilds:\n  esbuild: true\n  "@parcel/watcher": true\n  sharp: true\n' > pnpm-workspace.yaml
 RUN pnpm install
 RUN ADDON_FRONTEND_PORT=5300 pnpm build
 
