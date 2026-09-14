@@ -69,6 +69,31 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
 
   useEffect(() => () => clearHideTimer(), [clearHideTimer])
 
+  // Fullscreen áp lên chính container để overlay điều khiển (nút thoát) vẫn nằm trong
+  // phần tử được phóng to — fullscreen thẳng lên <video> sẽ che mất controls.
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  useEffect(() => {
+    const onChange = () => {
+      const active = document.fullscreenElement === containerRef.current
+      setIsFullscreen(active)
+      if (active) {
+        setControlsVisible(true)
+        scheduleHide()
+      }
+    }
+    document.addEventListener("fullscreenchange", onChange)
+    return () => document.removeEventListener("fullscreenchange", onChange)
+  }, [scheduleHide])
+
+  const toggleFullscreen = () => {
+    const el = containerRef.current
+    if (!el) return
+    if (document.fullscreenElement) void document.exitFullscreen()
+    else void el.requestFullscreen()
+  }
+
   // Khi chưa phát thì luôn hiện để user thấy nút Play; chỉ auto-hide lúc đang live.
   const controlsShown = paused || !streaming || controlsVisible
 
@@ -118,6 +143,7 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
   return (
     <div className="scout-live-card">
       <div
+        ref={containerRef}
         className="scout-live-card__video"
         onMouseEnter={() => revealControls(false)}
         onMouseMove={() => revealControls(true)}
@@ -185,10 +211,21 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
                 variant="ghost"
                 semantic="default"
                 disabled={connecting}
-                title={t("scout.live.fullscreen")}
+                title={t(
+                  isFullscreen
+                    ? "scout.live.exitFullscreen"
+                    : "scout.live.fullscreen",
+                )}
+                onClick={toggleFullscreen}
                 className="scout-live-card__button"
               >
-                <NmxIconFont symbol={NmxIconFontSymbol.FULLSCREEN} />
+                <NmxIconFont
+                  symbol={
+                    isFullscreen
+                      ? NmxIconFontSymbol.FULLSCREEN_EXIT
+                      : NmxIconFontSymbol.FULLSCREEN
+                  }
+                />
               </NmxButton>
             </div>
           </div>

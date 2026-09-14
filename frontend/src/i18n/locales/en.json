@@ -85,7 +85,8 @@
       "idle": "Stopped",
       "play": "Play",
       "stop": "Stop",
-      "fullscreen": "Fullscreen"
+      "fullscreen": "Fullscreen",
+      "exitFullscreen": "Exit fullscreen"
     },
     "errors": {
       "generic": "Something went wrong"

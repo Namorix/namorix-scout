@@ -19,6 +19,14 @@
   background-color: var(--nmx-color-surface-lowest);
 }
 
+.scout-live-card__video:fullscreen {
+  aspect-ratio: auto;
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
+  background-color: #000;
+}
+
 .scout-live-card__video video {
   display: block;
   width: 100%;
