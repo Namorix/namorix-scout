@@ -74,6 +74,8 @@ public sealed class WebRtcRelayService(
 
 internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
 {
+    private const int DisconnectGraceSeconds = 15;
+
     private readonly Lock _gate = new();
     private readonly ConcurrentQueue<string> _ice = new();
     private readonly List<byte[]> _packets = [];
@@ -83,6 +85,9 @@ internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
     private RTCPeerConnection? _peer;
     private bool _connected;
     private int _closedFlag;
+    private int _disconnectEpoch;
+    private VideoFrame? _lastKeyFrame;
+    private uint _lastRtpTimestamp;
 
     public Guid Id { get; } = Guid.NewGuid();
     public int PayloadType { get; private set; } = 96;
@@ -116,6 +121,11 @@ internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
             PayloadType = payloadType;
 
         await peer.setLocalDescription(offer);
+
+        // Subscribe before the connection is up so the most recent IDR is already
+        // cached by the time the viewer connects.
+        camera.FrameReceived += OnFrame;
+
         ct.ThrowIfCancellationRequested();
         return offer.sdp;
     }
@@ -132,10 +142,15 @@ internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
 
     private void OnConnectionStateChange(RTCPeerConnectionState state)
     {
+        if (Volatile.Read(ref _closedFlag) != 0)
+            return;
+
         switch (state)
         {
             case RTCPeerConnectionState.connected:
             {
+                Interlocked.Increment(ref _disconnectEpoch);
+
                 bool alreadyConnected;
                 lock (_gate)
                 {
@@ -145,26 +160,48 @@ internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
 
                 if (alreadyConnected)
                     return;
-                
-                camera.FrameReceived += OnFrame;
+
                 logger.LogInformation("WebRTC session {sessionId}: connected, relaying camera frames.", Id);
+                ReplayKeyFrame();
 
                 return;
             }
+            case RTCPeerConnectionState.disconnected:
+                // ICE consent freshness fails transiently when the viewer is throttled
+                // (background tab) and usually recovers on its own - only tear the
+                // session down if it is still down after the grace window.
+                logger.LogInformation("WebRTC session {sessionId}: disconnected, waiting {seconds}s for recovery.",
+                    Id, DisconnectGraceSeconds);
+                StartDisconnectGrace();
+                return;
+
             case RTCPeerConnectionState.failed:
             case RTCPeerConnectionState.closed:
-            case RTCPeerConnectionState.disconnected:
                 logger.LogInformation("WebRTC session {sessionId}: connection state {state}.", Id, state);
                 _ = CloseAsync();
-                break;
+                return;
 
             case RTCPeerConnectionState.@new:
             case RTCPeerConnectionState.connecting:
-                break;
-            
+                return;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(state), state, null);
         }
+    }
+
+    private void StartDisconnectGrace()
+    {
+        var epoch = Interlocked.Increment(ref _disconnectEpoch);
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(DisconnectGraceSeconds));
+            if (Volatile.Read(ref _disconnectEpoch) != epoch || Volatile.Read(ref _closedFlag) != 0)
+                return;
+
+            logger.LogInformation("WebRTC session {sessionId}: still disconnected after grace, closing.", Id);
+            await CloseAsync();
+        });
     }
 
     public bool ApplyAnswer(string? sdp)
@@ -207,6 +244,10 @@ internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
 
     private void OnFrame(VideoFrame frame)
     {
+        _lastRtpTimestamp = frame.RtpTimestamp;
+        if (frame.IsKeyFrame)
+            _lastKeyFrame = frame;
+
         var peer = _peer;
         if (peer is null)
             return;
@@ -215,18 +256,53 @@ internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
         {
             if (!_connected)
                 return;
+
+            SendFrame(peer, frame.Nals, frame.RtpTimestamp);
+        }
+    }
+
+    // A fresh viewer has no reference frames, so it stays black until the camera
+    // emits its next IDR (up to one GOP). Replaying the cached IDR paints it now.
+    private void ReplayKeyFrame()
+    {
+        var frame = _lastKeyFrame;
+        var peer = _peer;
+        if (frame is null || peer is null)
+            return;
+
+        var nals = new List<byte[]>(frame.Nals.Count + 2);
+        var codec = camera.GetCodec();
+        if (codec is not null)
+        {
+            if (!frame.Nals.Any(nal => nal.Length > 0 && (nal[0] & 0x1F) == 7))
+                nals.Add(codec.Sps);
+            if (!frame.Nals.Any(nal => nal.Length > 0 && (nal[0] & 0x1F) == 8))
+                nals.Add(codec.Pps);
         }
 
+        nals.AddRange(frame.Nals);
+
+        lock (_gate)
+        {
+            if (!_connected)
+                return;
+
+            SendFrame(peer, nals, _lastRtpTimestamp + 1);
+        }
+    }
+
+    private void SendFrame(RTCPeerConnection peer, IReadOnlyList<byte[]> nals, uint rtpTimestamp)
+    {
         try
         {
             _packets.Clear();
-            foreach (var nal in frame.Nals)
+            foreach (var nal in nals)
                 H264RtpPacketizer.PacketizeNal(nal, H264RtpPacketizer.MaxPayloadBytes, _packets);
 
             for (var i = 0; i < _packets.Count; i++)
             {
                 var marker = i == _packets.Count - 1 ? 1 : 0;
-                peer.SendRtpRaw(SDPMediaTypesEnum.video, _packets[i], frame.RtpTimestamp, marker, PayloadType);
+                peer.SendRtpRaw(SDPMediaTypesEnum.video, _packets[i], rtpTimestamp, marker, PayloadType);
             }
         }
         catch (Exception ex)
