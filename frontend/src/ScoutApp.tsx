@@ -14,14 +14,28 @@ import type { NmxBottomNavigationBarItemData } from "@namorix/ui"
 import "./i18n"
 import { useSessionGuard } from "@namorix/core"
 import { store } from "./store/store"
+import { CamerasView } from "./views/cameras/CamerasView"
 import { LiveView } from "./views/live/LiveView"
 import { SettingsView } from "./views/settings/SettingsView"
 
-type ScoutTab = "live" | "settings"
+type ScoutTab = "device" | "live" | "settings"
 
 const TABS: NmxBottomNavigationBarItemData[] = [
-  { key: "live", icon: NmxIconFontSymbol.CAMERA, label: "scout.nav.live" },
-  { key: "settings", icon: NmxIconFontSymbol.SETTING, label: "scout.nav.settings" },
+  {
+    key: "device",
+    icon: NmxIconFontSymbol.DEVICE,
+    label: "scout.nav.device",
+  },
+  {
+    key: "live",
+    icon: NmxIconFontSymbol.CAMERA,
+    label: "scout.nav.live",
+  },
+  {
+    key: "settings",
+    icon: NmxIconFontSymbol.SETTING,
+    label: "scout.nav.settings",
+  },
 ]
 
 export const ScoutApp: React.FC = () => {
@@ -36,6 +50,13 @@ export const ScoutApp: React.FC = () => {
       <NmxAddonRoot>
         <NmxToastProvider />
         <NmxTabProvider defaultTab="live">
+          <NmxBottomNavigationContent<ScoutTab>
+            tabKey="device"
+            spacingHorizontalDisabled
+            spacingVerticalDisabled
+          >
+            <CamerasView />
+          </NmxBottomNavigationContent>
           <NmxBottomNavigationContent<ScoutTab>
             tabKey="live"
             spacingHorizontalDisabled

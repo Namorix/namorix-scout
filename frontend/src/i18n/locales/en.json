@@ -2,6 +2,7 @@
   "scout": {
     "title": "Namorix Scout",
     "nav": {
+      "device": "Device",
       "live": "Live",
       "settings": "Settings"
     },
@@ -21,8 +22,20 @@
         "retention": "Retention (days)",
         "recordOn": "On",
         "recordOff": "Off",
+        "info": "Info",
         "edit": "Edit",
         "delete": "Delete"
+      },
+      "info": {
+        "username": "Username",
+        "credentials": "Credentials",
+        "credentialsSet": "Stored",
+        "credentialsNone": "None",
+        "createdAt": "Created",
+        "none": "—",
+        "yes": "Yes",
+        "no": "No",
+        "close": "Close"
       },
       "stream": {
         "main": "Main",
@@ -71,7 +84,8 @@
       "offline": "Offline",
       "idle": "Stopped",
       "play": "Play",
-      "stop": "Stop"
+      "stop": "Stop",
+      "fullscreen": "Fullscreen"
     },
     "errors": {
       "generic": "Something went wrong"

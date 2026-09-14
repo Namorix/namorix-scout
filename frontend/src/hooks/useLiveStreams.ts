@@ -7,10 +7,12 @@ export const IDLE: StreamStatus = { state: "idle", reason: null, stream: null }
 interface SessionEntry {
   client: RtcStreamClient
   auto: boolean
+  paused: boolean
 }
 
 export interface UseLiveStreamsResult {
   statuses: Record<string, StreamStatus>
+  paused: Record<string, boolean>
   play: (id: string) => void
   stop: (id: string) => void
 }
@@ -30,6 +32,7 @@ export function useLiveStreams(cameras: Camera[]): UseLiveStreamsResult {
   camerasRef.current = cameras
 
   const [statuses, setStatuses] = useState<Record<string, StreamStatus>>({})
+  const [paused, setPaused] = useState<Record<string, boolean>>({})
 
   const signature = cameras
     .filter((camera) => camera.enabled)
@@ -43,12 +46,18 @@ export function useLiveStreams(cameras: Camera[]): UseLiveStreamsResult {
       if (!camera || (entry.auto && !camera.enabled)) {
         entry.client.dispose()
         entriesRef.current.delete(id)
+        setPaused((prev) => {
+          if (!(id in prev)) return prev
+          const next = { ...prev }
+          delete next[id]
+          return next
+        })
       }
     }
     for (const camera of camerasRef.current) {
       if (!camera.enabled || entriesRef.current.has(camera.id)) continue
       const client = createClient(camera.id, setStatuses)
-      entriesRef.current.set(camera.id, { client, auto: true })
+      entriesRef.current.set(camera.id, { client, auto: true, paused: false })
       client.start()
     }
   }, [signature])
@@ -61,25 +70,26 @@ export function useLiveStreams(cameras: Camera[]): UseLiveStreamsResult {
     [],
   )
 
+  // Pause giữ nguyên peer connection và MediaStream, chỉ phủ poster lên trên —
+  // resume không phải offer/answer lại nên không có state connecting.
   const play = useCallback((id: string) => {
     const existing = entriesRef.current.get(id)
     if (existing) {
-      existing.client.dispose()
-      entriesRef.current.delete(id)
+      existing.paused = false
+      setPaused((prev) => (prev[id] ? { ...prev, [id]: false } : prev))
+      return
     }
     const client = createClient(id, setStatuses)
-    entriesRef.current.set(id, { client, auto: false })
+    entriesRef.current.set(id, { client, auto: false, paused: false })
     client.start()
   }, [])
 
   const stop = useCallback((id: string) => {
     const existing = entriesRef.current.get(id)
-    if (existing) {
-      existing.client.dispose()
-      entriesRef.current.delete(id)
-    }
-    setStatuses((prev) => ({ ...prev, [id]: { state: "idle", reason: null, stream: null } }))
+    if (!existing) return
+    existing.paused = true
+    setPaused((prev) => (prev[id] ? prev : { ...prev, [id]: true }))
   }, [])
 
-  return { statuses, play, stop }
+  return { statuses, paused, play, stop }
 }

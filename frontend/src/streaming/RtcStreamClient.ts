@@ -16,6 +16,9 @@ export interface RtcStreamCallbacks {
 const ICE_POLL_MS = 250
 const CONNECT_TIMEOUT_MS = 20_000
 const GATHER_TIMEOUT_MS = 5_000
+const DISCONNECT_GRACE_MS = 8_000
+const RECONNECT_MIN_MS = 1_000
+const RECONNECT_MAX_MS = 5_000
 
 function normalizeCandidate(value: string): string {
   let text = value.trim()
@@ -47,6 +50,11 @@ export class RtcStreamClient {
   private peer: RTCPeerConnection | null = null
   private sessionId: string | null = null
   private pollTimer: ReturnType<typeof setInterval> | null = null
+  private retryTimer: ReturnType<typeof setTimeout> | null = null
+  private graceTimer: ReturnType<typeof setTimeout> | null = null
+  private visibilityBound = false
+  private attempt = 0
+  private degraded = false
   private runId = 0
   private disposed = false
 
@@ -59,6 +67,8 @@ export class RtcStreamClient {
     if (this.disposed) return
     const run = ++this.runId
     this.stopInternal()
+    this.attempt = 0
+    this.degraded = false
     this.callbacks.onState("connecting", null)
     void this.connect(run)
   }
@@ -72,8 +82,11 @@ export class RtcStreamClient {
   }
 
   dispose(): void {
+    if (this.disposed) return
     this.disposed = true
-    this.stop()
+    this.runId += 1
+    this.stopInternal()
+    this.disarmVisibility()
   }
 
   private isCurrent(run: number): boolean {
@@ -85,10 +98,14 @@ export class RtcStreamClient {
     try {
       offer = await streamsController.offer(this.cameraId)
     } catch {
-      if (this.isCurrent(run)) this.fail("stream-offline")
+      if (this.isCurrent(run)) this.scheduleRetry(run, "stream-offline")
       return
     }
     if (!this.isCurrent(run)) return
+
+    // The server session exists as soon as the offer is issued, so publish its id
+    // now - our ICE candidates start firing during gathering and must not be dropped.
+    this.sessionId = offer.sessionId
 
     const peer = new RTCPeerConnection({ iceServers: [] })
     this.peer = peer
@@ -111,10 +128,16 @@ export class RtcStreamClient {
       if (!this.isCurrent(run) || this.peer !== peer) return
       const state = peer.connectionState
       if (state === "connected") {
+        this.attempt = 0
+        this.degraded = false
+        this.disarmVisibility()
         this.clearPoll()
+        this.clearGrace()
         this.callbacks.onState("live", null)
-      } else if (state === "failed" || state === "closed" || state === "disconnected") {
-        this.fail("connection-lost")
+      } else if (state === "disconnected") {
+        this.startGrace(run)
+      } else if (state === "failed" || state === "closed") {
+        this.scheduleRetry(run, "connection-lost")
       }
     }
 
@@ -125,11 +148,10 @@ export class RtcStreamClient {
       await waitIceGathering(peer)
       if (!this.isCurrent(run)) return
 
-      this.sessionId = offer.sessionId
       const sdp = peer.localDescription?.sdp ?? ""
       await streamsController.answer(offer.sessionId, sdp)
     } catch {
-      if (this.isCurrent(run)) this.fail("negotiation-failed")
+      if (this.isCurrent(run)) this.scheduleRetry(run, "negotiation-failed")
       return
     }
 
@@ -157,9 +179,11 @@ export class RtcStreamClient {
         this.callbacks.onState("live", null)
         return
       }
-      if (Date.now() > deadline) {
+      // A hidden tab throttles this interval, so the wall-clock deadline would
+      // expire while nothing could actually be attempted - defer until visible.
+      if (!document.hidden && Date.now() > deadline) {
         this.clearPoll()
-        this.fail("timeout")
+        this.scheduleRetry(run, "timeout")
         return
       }
       void streamsController
@@ -176,12 +200,39 @@ export class RtcStreamClient {
     }, ICE_POLL_MS)
   }
 
-  private fail(reason: string): void {
-    if (this.disposed) return
-    this.runId += 1
+  private scheduleRetry(run: number, reason: string): void {
+    if (!this.isCurrent(run)) return
     this.stopInternal()
+    this.degraded = true
     this.callbacks.onStream(null)
-    this.callbacks.onState("offline", reason)
+    this.callbacks.onState("connecting", reason)
+
+    const delay = Math.min(RECONNECT_MIN_MS * 2 ** this.attempt, RECONNECT_MAX_MS)
+    this.attempt += 1
+    this.retryTimer = window.setTimeout(() => {
+      this.retryTimer = null
+      this.disarmVisibility()
+      if (!this.isCurrent(run)) return
+      void this.connect(run)
+    }, delay)
+    this.armVisibility()
+  }
+
+  private startGrace(run: number): void {
+    this.degraded = true
+    this.armVisibility()
+    if (this.graceTimer !== null) return
+    this.graceTimer = window.setTimeout(() => {
+      this.graceTimer = null
+      this.scheduleRetry(run, "connection-lost")
+    }, DISCONNECT_GRACE_MS)
+  }
+
+  private clearGrace(): void {
+    if (this.graceTimer !== null) {
+      clearTimeout(this.graceTimer)
+      this.graceTimer = null
+    }
   }
 
   private clearPoll(): void {
@@ -191,8 +242,35 @@ export class RtcStreamClient {
     }
   }
 
+  private readonly onVisibility = (): void => {
+    if (this.disposed || document.visibilityState !== "visible") return
+    if (!this.degraded) return
+    const run = this.runId
+    if (!this.isCurrent(run)) return
+    this.stopInternal()
+    void this.connect(run)
+  }
+
+  private armVisibility(): void {
+    if (this.visibilityBound) return
+    this.visibilityBound = true
+    document.addEventListener("visibilitychange", this.onVisibility)
+  }
+
+  private disarmVisibility(): void {
+    if (!this.visibilityBound) return
+    this.visibilityBound = false
+    document.removeEventListener("visibilitychange", this.onVisibility)
+  }
+
   private stopInternal(): void {
     this.clearPoll()
+    this.clearGrace()
+    this.disarmVisibility()
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
+    }
     const sessionId = this.sessionId
     this.sessionId = null
     if (sessionId) {

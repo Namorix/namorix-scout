@@ -1,9 +1,15 @@
+@use "@namorix/styles/mixins" as *;
+
+.scout-live__container .scout-live__content {
+  overflow-y: auto;
+
+  @include scrollbar;
+}
+
 .scout-live-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nmx-spacing-sm);
-  background-color: var(--nmx-color-surface-low);
   border-radius: var(--nmx-radius-md);
+  background-color: var(--nmx-color-surface-low);
+  overflow: hidden;
 }
 
 .scout-live-card__video {
@@ -11,8 +17,6 @@
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background-color: var(--nmx-color-surface-lowest);
-  border-top-left-radius: var(--nmx-radius-md);
-  border-top-right-radius: var(--nmx-radius-md);
 }
 
 .scout-live-card__video video {
@@ -22,9 +26,19 @@
   object-fit: contain;
 }
 
+.scout-live-card__poster {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .scout-live-card__overlay {
   position: absolute;
   inset: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -32,28 +46,54 @@
   color: var(--nmx-color-on-surface);
 }
 
-.scout-live-card__head {
+.scout-live-card__controls {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
   display: flex;
-  flex-direction: row;
-  align-items: center;
+  flex-direction: column;
   justify-content: space-between;
-  gap: var(--nmx-spacing-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.scout-live-card__controls--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.scout-live-card__top {
+  display: flex;
+  align-items: center;
   padding: var(--nmx-spacing-md);
-  padding-top: var(--nmx-spacing-sm);
+  background: linear-gradient(to bottom, var(--nmx-color-scrim), transparent);
 }
 
 .scout-live-card__name {
-  font-size: var(--nmx-font-size-lg);
-  font-weight: var(--nmx-font-weight-bold);
-  color: var(--nmx-color-on-surface);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--nmx-font-size-lg);
+  font-weight: var(--nmx-font-weight-bold);
+  color: var(--nmx-color-on-primary);
 }
 
-.scout-live-card__actions {
+.scout-live-card__bottom {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
   gap: var(--nmx-spacing-sm);
+  padding: var(--nmx-spacing-md);
+  background: linear-gradient(to top, var(--nmx-color-scrim), transparent);
+
+  &-end {
+    margin-left: auto;
+  }
+
+  .scout-live-card__button {
+    color: #fff;
+    font-size: var(--nmx-font-size-md);
+  }
 }
+

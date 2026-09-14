@@ -1,0 +1,72 @@
+.scout-camera-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nmx-spacing-md);
+  padding: var(--nmx-spacing-md);
+  background-color: var(--nmx-color-surface-low);
+  border-radius: var(--nmx-radius-md);
+}
+
+.scout-camera-card__head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nmx-spacing-sm);
+}
+
+.scout-camera-card__name {
+  font-size: var(--nmx-font-size-lg);
+  font-weight: var(--nmx-font-weight-bold);
+  color: var(--nmx-color-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scout-camera-card__badges {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--nmx-spacing-xs);
+  flex-shrink: 0;
+}
+
+.scout-camera-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nmx-spacing-xs);
+  min-width: 0;
+}
+
+.scout-camera-card__row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nmx-spacing-sm);
+  min-width: 0;
+}
+
+.scout-camera-card__label {
+  font-size: var(--nmx-font-size-sm);
+  color: var(--nmx-color-on-surface-variant);
+  flex-shrink: 0;
+}
+
+.scout-camera-card__value {
+  font-size: var(--nmx-font-size-sm);
+  color: var(--nmx-color-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.scout-camera-card__actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nmx-spacing-sm);
+}
