@@ -28,8 +28,8 @@ export const ScoutApp: React.FC = () => {
   const { t } = useTranslation()
   const guard = useSessionGuard()
 
-  if (guard === "loading") return <NmxLoadingOverlay />
-  if (guard === "unauthorized") return null
+  if (guard.state === "loading") return <NmxLoadingOverlay />
+  if (guard.state === "unauthorized") return null
 
   return (
     <Provider store={store}>
