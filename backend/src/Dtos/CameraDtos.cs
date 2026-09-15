@@ -10,7 +10,11 @@ public sealed record ScCameraDto(
     int RetentionDays,
     bool HasCredentials,
     string? Username,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    DateTimeOffset LastUpdatedAt,
+    string State,
+    string? LastError,
+    DateTimeOffset? LastFrameAt);
 
 public sealed record CameraUpsertRequest(
     string? Name,

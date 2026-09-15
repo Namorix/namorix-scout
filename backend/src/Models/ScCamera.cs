@@ -11,4 +11,5 @@ public sealed class ScCamera
     public bool RecordEnabled { get; set; }
     public int RetentionDays { get; set; } = 7;
     public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset LastUpdatedAt { get; set; }
 }

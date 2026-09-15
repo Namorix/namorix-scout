@@ -2,24 +2,50 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Namorix.Scout.Models;
 using Rtsp;
 using Rtsp.Messages;
 using Rtsp.Sdp;
 
 namespace Namorix.Scout.Streaming;
 
-public sealed class CameraRtspClient(
-    Guid cameraId,
-    string cameraName,
-    string configUrl,
-    string? configuredCredentials,
-    ILoggerFactory loggerFactory) : IAsyncDisposable
+public sealed class CameraRtspClient : IAsyncDisposable
 {
-    private readonly ILogger _logger = loggerFactory.CreateLogger<CameraRtspClient>();
-    private readonly ILogger<RtspListener> _listenerLogger = loggerFactory.CreateLogger<RtspListener>();
+    private const int StallSeconds = 15;
+
+    private static readonly TimeSpan RetryMinDelay = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan RetryMaxDelay = TimeSpan.FromSeconds(60);
+
+    private readonly ILogger _logger;
+    private readonly ILogger<RtspListener> _listenerLogger;
     private readonly CancellationTokenSource _cts = new();
     private readonly CodecState _codec = new();
     private readonly FrameStats _stats = new();
+
+    private readonly Lock _stateGate = new();
+    private readonly Lock _configGate = new();
+    private string _cameraName;
+    private string _configUrl;
+    private string? _configuredCredentials;
+    private long _configVersion;
+    private int _retryAttempt;
+    private string? _lastError;
+    private DateTimeOffset? _lastFrameAt;
+
+    public CameraRtspClient(
+        Guid cameraId,
+        string cameraName,
+        string configUrl,
+        string? configuredCredentials,
+        ILoggerFactory loggerFactory)
+    {
+        CameraId = cameraId;
+        _cameraName = cameraName;
+        _configUrl = configUrl;
+        _configuredCredentials = configuredCredentials;
+        _logger = loggerFactory.CreateLogger<CameraRtspClient>();
+        _listenerLogger = loggerFactory.CreateLogger<RtspListener>();
+    }
 
     private Task? _runTask;
     private Uri _uri = null!;
@@ -34,13 +60,87 @@ public sealed class CameraRtspClient(
     private RtspRequest? _inflight;
     private H264Depacketizer? _depacketizer;
 
-    public Guid CameraId { get; } = cameraId;
+    public Guid CameraId { get; }
 
     public event Action<VideoFrame>? FrameReceived;
 
     public void Start() => _runTask = Task.Run(() => RunAsync(_cts.Token));
 
+    // Viewer sessions hold a reference to this object and receive frames through
+    // FrameReceived, so settings have to change in place: a replacement client would strand
+    // every live viewer on a stopped object until it reconnected by hand. Bumping the
+    // version tells the running session to let go of the camera it was told to read.
+    public void UpdateConfig(string cameraName, string configUrl, string? configuredCredentials)
+    {
+        lock (_configGate)
+        {
+            _cameraName = cameraName;
+            _configUrl = configUrl;
+            _configuredCredentials = configuredCredentials;
+            _configVersion++;
+        }
+
+        lock (_stateGate)
+        {
+            _lastError = null;
+            _lastFrameAt = null;
+        }
+
+        // New settings, fresh start: a camera that was backing off should be retried at the
+        // short delay again rather than inherit the wait for the old address.
+        Interlocked.Exchange(ref _retryAttempt, 0);
+    }
+
+    private string Name()
+    {
+        lock (_configGate)
+        {
+            return _cameraName;
+        }
+    }
+
     public H264CodecSnapshot? GetCodec() => _codec.Get();
+
+    public CameraRuntimeStatus GetStatus()
+    {
+        lock (_stateGate)
+        {
+            if (_lastError is not null)
+                return new CameraRuntimeStatus(CameraRuntimeState.Failed, _lastError, _lastFrameAt);
+
+            var lastFrame = _lastFrameAt;
+            if (lastFrame is null)
+                return new CameraRuntimeStatus(CameraRuntimeState.Connecting, null, null);
+
+            var silence = DateTimeOffset.UtcNow - lastFrame.Value;
+            if (silence <= TimeSpan.FromSeconds(StallSeconds))
+                return new CameraRuntimeStatus(CameraRuntimeState.Streaming, null, lastFrame);
+
+            // PLAY succeeded, so the camera going quiet is not an exception anyone can
+            // catch - the socket stays open and the loop sees nothing wrong. Age out the
+            // "streaming" claim instead of trusting the last successful handshake.
+            return new CameraRuntimeStatus(CameraRuntimeState.Failed,
+                $"No video received for {silence.TotalSeconds:0}s.", lastFrame);
+        }
+    }
+
+    private void SetError(string message)
+    {
+        lock (_stateGate)
+        {
+            _lastError = message;
+        }
+    }
+
+    // The exception text is surfaced to the UI, so the cases users actually hit get a
+    // sentence instead of a framework string.
+    private static string DescribeFailure(Exception ex) => ex switch
+    {
+        TimeoutException => "The camera did not answer in time.",
+        OperationCanceledException => "Timed out connecting to the camera.",
+        SocketException socket => socket.Message,
+        _ => ex.Message,
+    };
 
     public async Task StopAsync()
     {
@@ -58,7 +158,7 @@ public sealed class CameraRtspClient(
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "RTSP client for {name} stopped with an error.", cameraName);
+            _logger.LogWarning(ex, "RTSP client for {name} stopped with an error.", Name());
         }
     }
 
@@ -72,9 +172,18 @@ public sealed class CameraRtspClient(
     {
         while (!ct.IsCancellationRequested)
         {
+            var configVersion = Volatile.Read(ref _configVersion);
+            TimeSpan retryDelay;
+
             try
             {
                 await RunSessionAsync(ct);
+                // A session that ended because the settings moved has nothing to back off
+                // from - reconnecting at once is what makes an edit land on a camera that
+                // was running.
+                retryDelay = Volatile.Read(ref _configVersion) != configVersion
+                    ? TimeSpan.Zero
+                    : NextRetryDelay();
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -82,12 +191,18 @@ public sealed class CameraRtspClient(
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "RTSP session for {name} failed - reconnecting in 5s.", cameraName);
+                SetError(DescribeFailure(ex));
+                retryDelay = NextRetryDelay();
+                _logger.LogWarning(ex, "RTSP session for {name} failed - reconnecting in {seconds:0}s.",
+                    Name(), retryDelay.TotalSeconds);
             }
+
+            if (retryDelay <= TimeSpan.Zero)
+                continue;
 
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                await Task.Delay(retryDelay, ct);
             }
             catch (OperationCanceledException)
             {
@@ -96,8 +211,22 @@ public sealed class CameraRtspClient(
         }
     }
 
+    // Failed sessions get further apart instead of a flat 5s: a camera that turns connections
+    // away is only pushed further by the retries themselves, because firmware that is slow to
+    // release a dropped session keeps accumulating the ones being opened. Frames reset this.
+    private TimeSpan NextRetryDelay()
+    {
+        var attempt = Interlocked.Increment(ref _retryAttempt);
+        var seconds = RetryMinDelay.TotalSeconds * Math.Pow(2, attempt - 1);
+        return TimeSpan.FromSeconds(Math.Min(seconds, RetryMaxDelay.TotalSeconds));
+    }
+
     private async Task RunSessionAsync(CancellationToken ct)
     {
+        // Which settings this session was built from, so the wait loop below can tell that
+        // they moved and hand the camera to a session built from the new ones.
+        var configVersion = Volatile.Read(ref _configVersion);
+
         _auth = null;
         _nonceCounter = 0;
         _sessionId = null;
@@ -163,12 +292,22 @@ public sealed class CameraRtspClient(
 
             EnsureOk(await SendWithAuthAsync(play, ct), "PLAY");
 
-            _logger.LogInformation("PLAY OK - receiving stream for camera {name}.", cameraName);
+            _logger.LogInformation("PLAY OK - receiving stream for camera {name}.", Name());
 
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
             while (await timer.WaitForNextTickAsync(ct))
             {
                 _stats.LogAndReset(_logger);
+
+                // An edited camera still points at the old address or credentials here, and
+                // nothing in the socket would ever say so - the session has to be rebuilt
+                // from the new settings instead.
+                if (Volatile.Read(ref _configVersion) != configVersion)
+                {
+                    _logger.LogInformation("Config changed for camera {name} - reconnecting.", Name());
+                    return;
+                }
+
                 if (_transport.Connected)
                     continue;
 
@@ -209,6 +348,14 @@ public sealed class CameraRtspClient(
 
     private void ParseConnection()
     {
+        string configUrl;
+        string? configuredCredentials;
+        lock (_configGate)
+        {
+            configUrl = _configUrl;
+            configuredCredentials = _configuredCredentials;
+        }
+
         _uri = ParseUri(configUrl);
         var urlUserInfo = _uri.UserInfo;
 
@@ -324,7 +471,7 @@ public sealed class CameraRtspClient(
             if (_credential is null)
             {
                 _logger.LogWarning("Server returned 401 for {method} but no credentials are configured for camera {name}.",
-                    request.RequestTyped, cameraName);
+                    request.RequestTyped, Name());
                 return response;
             }
 
@@ -415,7 +562,16 @@ public sealed class CameraRtspClient(
 
     private void OnFrame(VideoFrame frame)
     {
+        // Frames mean the camera answered, so any later reconnect starts from the short delay.
+        Interlocked.Exchange(ref _retryAttempt, 0);
+
         _stats.CountFrame(frame);
+
+        lock (_stateGate)
+        {
+            _lastFrameAt = DateTimeOffset.UtcNow;
+            _lastError = null;
+        }
 
         foreach (var nal in frame.Nals)
         {
@@ -533,18 +689,7 @@ public sealed class CameraRtspClient(
             {
                 var seconds = _clock.Elapsed.TotalSeconds;
                 if (_packets == 0)
-                {
                     logger.LogInformation("No RTP packets (channel 0) received in {seconds:0.0}s.", seconds);
-                }
-                else
-                {
-                    var max = Math.Max(seconds, 0.001);
-                    logger.LogInformation(
-                        "RTP: {packets:N0} packets · {mbytes:0.00} MB · {kbps:0.0} kbps · {fps:0.0} fps · " +
-                        "frames={frames:N0} IDR={idr} SPS={sps} PPS={pps}",
-                        _packets, _rtpBytes / 1024.0 / 1024.0, _rtpBytes * 8 / 1000.0 / max,
-                        _frames / max, _frames, _idr, _sps, _pps);
-                }
 
                 _packets = _rtpBytes = _frames = _idr = _sps = _pps = 0;
                 _clock.Restart();

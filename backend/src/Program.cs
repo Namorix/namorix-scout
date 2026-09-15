@@ -26,6 +26,7 @@ builder.Services.AddNamorixCore<ScoutHub>(builder.Environment.IsDevelopment(), o
 builder.Services.AddNmxOAuth2Client();
 builder.Services.AddAddonChannelClient();
 builder.Services.AddHostedService<ScoutService>();
+builder.Services.AddSingleton<CameraChangeSignal>();
 builder.Services.AddSingleton<RtspIngestService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RtspIngestService>());
 builder.Services.AddSingleton<WebRtcRelayService>();

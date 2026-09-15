@@ -2,12 +2,15 @@ using Microsoft.EntityFrameworkCore;
 using Namorix.Scout.Dtos;
 using Namorix.Scout.Models;
 using Namorix.Scout.Persistence;
+using Namorix.Scout.Streaming;
 
 namespace Namorix.Scout.Services;
 
 public sealed class CameraService(
     IDbContextFactory<ScoutDbContext> dbFactory,
-    ScoutSecretProtector secretProtector)
+    ScoutSecretProtector secretProtector,
+    CameraChangeSignal changes,
+    RtspIngestService ingest)
 {
     private static readonly HashSet<string> AllowedSchemes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -42,6 +45,7 @@ public sealed class CameraService(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         db.Cameras.Add(camera);
         await db.SaveChangesAsync(ct);
+        changes.Notify();
         return ToDto(camera);
     }
 
@@ -53,6 +57,7 @@ public sealed class CameraService(
 
         Apply(camera, request);
         await db.SaveChangesAsync(ct);
+        changes.Notify();
         return ToDto(camera);
     }
 
@@ -64,6 +69,7 @@ public sealed class CameraService(
 
         db.Cameras.Remove(camera);
         await db.SaveChangesAsync(ct);
+        changes.Notify();
         return true;
     }
 
@@ -79,6 +85,7 @@ public sealed class CameraService(
         var credentials = ResolveCredentials(request.Username, request.Password, urlCredentials);
         if (credentials is not null)
             camera.RtspCredentials = secretProtector.Protect(credentials);
+        camera.LastUpdatedAt = DateTimeOffset.UtcNow;
     }
 
     private static string RequireName(string? name) =>
@@ -138,6 +145,9 @@ public sealed class CameraService(
     private ScCameraDto ToDto(ScCamera camera)
     {
         var username = ReadUsername(camera.RtspCredentials);
+        // Merged in here rather than in the controller so every list/get/create/update
+        // answer carries the same live health, with no second request for the UI.
+        var status = ingest.GetStatus(camera.Id);
         return new ScCameraDto(
             camera.Id,
             camera.Name,
@@ -148,7 +158,11 @@ public sealed class CameraService(
             camera.RetentionDays,
             !string.IsNullOrEmpty(camera.RtspCredentials),
             username,
-            camera.CreatedAt);
+            camera.CreatedAt,
+            camera.LastUpdatedAt,
+            status.State.ToString().ToLowerInvariant(),
+            status.LastError,
+            status.LastFrameAt);
     }
 
     private string? ReadUsername(string? protectedCredentials)
