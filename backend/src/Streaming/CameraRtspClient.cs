@@ -13,6 +13,11 @@ public sealed class CameraRtspClient : IAsyncDisposable
 {
     private const int StallSeconds = 15;
 
+    // A single refused handshake is common enough that reporting it straight away would have
+    // the UI flash OFFLINE between two retries that both succeed, so only a run of failures
+    // is treated as the camera being down.
+    private const int ErrorAfterFailures = 3;
+
     private static readonly TimeSpan RetryMinDelay = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RetryMaxDelay = TimeSpan.FromSeconds(60);
 
@@ -29,8 +34,10 @@ public sealed class CameraRtspClient : IAsyncDisposable
     private string? _configuredCredentials;
     private long _configVersion;
     private int _retryAttempt;
+    private int _consecutiveFailures;
     private string? _lastError;
     private DateTimeOffset? _lastFrameAt;
+    private bool _sessionLive;
 
     public CameraRtspClient(
         Guid cameraId,
@@ -89,6 +96,7 @@ public sealed class CameraRtspClient : IAsyncDisposable
         // New settings, fresh start: a camera that was backing off should be retried at the
         // short delay again rather than inherit the wait for the old address.
         Interlocked.Exchange(ref _retryAttempt, 0);
+        Interlocked.Exchange(ref _consecutiveFailures, 0);
     }
 
     private string Name()
@@ -107,6 +115,12 @@ public sealed class CameraRtspClient : IAsyncDisposable
         {
             if (_lastError is not null)
                 return new CameraRuntimeStatus(CameraRuntimeState.Failed, _lastError, _lastFrameAt);
+
+            // Between sessions there is no stream that could be silent, and the last frame of
+            // the session that ended says nothing about the one being opened - reading it as a
+            // stall here would outrun the failure count and put OFFLINE back on screen.
+            if (!_sessionLive)
+                return new CameraRuntimeStatus(CameraRuntimeState.Connecting, null, _lastFrameAt);
 
             var lastFrame = _lastFrameAt;
             if (lastFrame is null)
@@ -191,7 +205,11 @@ public sealed class CameraRtspClient : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                SetError(DescribeFailure(ex));
+                // The warning is logged on every attempt; only the state the UI reads waits
+                // for the failures to pile up. Frames clear both.
+                if (Interlocked.Increment(ref _consecutiveFailures) >= ErrorAfterFailures)
+                    SetError(DescribeFailure(ex));
+
                 retryDelay = NextRetryDelay();
                 _logger.LogWarning(ex, "RTSP session for {name} failed - reconnecting in {seconds:0}s.",
                     Name(), retryDelay.TotalSeconds);
@@ -294,6 +312,14 @@ public sealed class CameraRtspClient : IAsyncDisposable
 
             _logger.LogInformation("PLAY OK - receiving stream for camera {name}.", Name());
 
+            lock (_stateGate)
+            {
+                // The new session gets its own clock: silence is measured from here, not from
+                // whatever the session that ended left behind.
+                _lastFrameAt = null;
+                _sessionLive = true;
+            }
+
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
             while (await timer.WaitForNextTickAsync(ct))
             {
@@ -317,6 +343,11 @@ public sealed class CameraRtspClient : IAsyncDisposable
         }
         finally
         {
+            lock (_stateGate)
+            {
+                _sessionLive = false;
+            }
+
             SendTeardown();
             _listener.MessageReceived -= OnMessageReceived;
             _listener.DataReceived -= OnDataReceived;
@@ -562,8 +593,10 @@ public sealed class CameraRtspClient : IAsyncDisposable
 
     private void OnFrame(VideoFrame frame)
     {
-        // Frames mean the camera answered, so any later reconnect starts from the short delay.
+        // Frames mean the camera answered, so any later reconnect starts from the short delay
+        // and any failure run counted so far is over.
         Interlocked.Exchange(ref _retryAttempt, 0);
+        Interlocked.Exchange(ref _consecutiveFailures, 0);
 
         _stats.CountFrame(frame);
 
