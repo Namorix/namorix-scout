@@ -10,6 +10,12 @@ const config: CapacitorConfig = {
     cleartext: true,
     allowNavigation: ["namorix.online", "*.namorix.online"],
   },
+  plugins: {
+    SystemBars: {
+      insetsHandling: "disable",
+      style: "dark",
+    },
+  },
 }
 
 export default config
