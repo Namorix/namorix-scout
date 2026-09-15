@@ -70,8 +70,8 @@ export function useLiveStreams(cameras: Camera[]): UseLiveStreamsResult {
     [],
   )
 
-  // Pause giữ nguyên peer connection và MediaStream, chỉ phủ poster lên trên —
-  // resume không phải offer/answer lại nên không có state connecting.
+  // Pausing keeps the peer connection and MediaStream intact and only overlays a
+  // poster — resuming needs no new offer/answer, so there is no connecting state.
   const play = useCallback((id: string) => {
     const existing = entriesRef.current.get(id)
     if (existing) {

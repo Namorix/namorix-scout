@@ -34,6 +34,13 @@
   object-fit: contain;
 }
 
+.scout-live-card__video:fullscreen video {
+  // touch-action: none keeps the WebView from claiming the gesture as a page zoom.
+  touch-action: none;
+  transform: translate(var(--scout-zoom-x, 0), var(--scout-zoom-y, 0))
+    scale(var(--scout-zoom-scale, 1));
+}
+
 .scout-live-card__poster {
   position: absolute;
   inset: 0;
@@ -66,9 +73,14 @@
   transition: opacity 0.2s ease;
 }
 
+// The container stays transparent to touch even while visible — otherwise the overlay
+// would swallow the pinch gesture instead of letting it reach the video.
 .scout-live-card__controls--visible {
   opacity: 1;
-  pointer-events: auto;
+
+  .scout-live-card__button {
+    pointer-events: auto;
+  }
 }
 
 .scout-live-card__top {
@@ -104,4 +116,3 @@
     font-size: var(--nmx-font-size-md);
   }
 }
-

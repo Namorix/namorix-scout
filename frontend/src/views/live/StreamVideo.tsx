@@ -38,5 +38,14 @@ export const StreamVideo: React.FC<StreamVideoProps> = ({
     }
   }, [ref])
 
-  return <video ref={ref} className={className} muted autoPlay playsInline />
+  return (
+    <video
+      ref={ref}
+      className={className}
+      controls={false}
+      muted
+      autoPlay
+      playsInline
+    />
+  )
 }

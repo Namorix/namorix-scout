@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { Capacitor, SystemBarType, SystemBars } from "@capacitor/core"
+import { ScreenOrientation } from "@capacitor/screen-orientation"
 import {
   NmxBadge,
   NmxButton,
@@ -9,6 +11,8 @@ import {
 } from "@namorix/ui"
 import type { StreamStatus } from "../../streaming/RtcStreamClient"
 import type { Camera } from "../../types/camera"
+import { usePinchZoom } from "../../hooks/usePinchZoom"
+import { exitFullscreen } from "../../utils/fullscreen"
 import { StreamVideo } from "./StreamVideo"
 
 interface CameraLiveCardProps {
@@ -36,17 +40,17 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
-  // <video> mất sạch khung hình khi track kết thúc, nên khi pause phải tự chụp
-  // frame cuối lúc bấm Stop rồi dùng nó làm poster.
+  // <video> clears its frame once the track ends, so on pause we capture the last
+  // frame at Stop and reuse it as the poster.
   const [poster, setPoster] = useState<string | null>(null)
 
-  // Phiên sống suốt lúc pause, nên poster chỉ bỏ khi thật sự quay lại live.
+  // The session stays alive while paused, so only drop the poster once we are live again.
   useEffect(() => {
     if (!paused && status.stream) setPoster(null)
   }, [paused, status.stream])
 
   const showPoster = paused && poster !== null
-  // Chỉ hiện badge khi chưa có ảnh — pause thì giữ nguyên poster.
+  // Only show the badge when there is no captured image — keep the poster while paused.
   const showOverlay = !showPoster && !streaming
 
   const [controlsVisible, setControlsVisible] = useState(false)
@@ -69,10 +73,12 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
 
   useEffect(() => () => clearHideTimer(), [clearHideTimer])
 
-  // Fullscreen áp lên chính container để overlay điều khiển (nút thoát) vẫn nằm trong
-  // phần tử được phóng to — fullscreen thẳng lên <video> sẽ che mất controls.
+  // Fullscreen targets the container so the control overlay (the exit button) stays
+  // inside the enlarged element — fullscreening the <video> directly hides the controls.
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+
+  usePinchZoom(videoRef, isFullscreen)
 
   useEffect(() => {
     const onChange = () => {
@@ -82,19 +88,43 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
         setControlsVisible(true)
         scheduleHide()
       }
+      // Fullscreen API only scales the web content; the system bars live in the native
+      // window layer, so they stay visible unless hidden separately.
+      // Orientation is deliberately NOT unlocked here: this event also fires spuriously
+      // around the orientation change itself, which would snap the device back to portrait.
+      if (Capacitor.isNativePlatform()) {
+        const systemBars = active
+          ? SystemBars.hide({ bar: SystemBarType.StatusBar })
+          : SystemBars.show({ bar: SystemBarType.StatusBar })
+        systemBars.catch((err) =>
+          console.error("[Scout] SystemBars toggle failed", err),
+        )
+      }
     }
     document.addEventListener("fullscreenchange", onChange)
     return () => document.removeEventListener("fullscreenchange", onChange)
   }, [scheduleHide])
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = async () => {
     const el = containerRef.current
     if (!el) return
-    if (document.fullscreenElement) void document.exitFullscreen()
-    else void el.requestFullscreen()
+
+    if (document.fullscreenElement) {
+      await exitFullscreen()
+      return
+    }
+
+    await el.requestFullscreen()
+    // Rotation is a separate API from fullscreen, and the spec only allows locking
+    // once the document is in fullscreen — hence the await above.
+    if (Capacitor.isNativePlatform()) {
+      await ScreenOrientation.lock({ orientation: "landscape" }).catch(() => {})
+    } else {
+      await screen.orientation?.lock("landscape").catch(() => {})
+    }
   }
 
-  // Khi chưa phát thì luôn hiện để user thấy nút Play; chỉ auto-hide lúc đang live.
+  // Always visible when not playing so the user can reach Play; auto-hide only while live.
   const controlsShown = paused || !streaming || controlsVisible
 
   const revealControls = (withTimer: boolean) => {
@@ -148,7 +178,10 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
         onMouseEnter={() => revealControls(false)}
         onMouseMove={() => revealControls(true)}
         onMouseLeave={hideControls}
-        onTouchStart={() => revealControls(true)}
+        onTouchStart={(event) => {
+          // Two fingers is the start of a pinch — leave the controls alone.
+          if (event.touches.length === 1) revealControls(true)
+        }}
       >
         <StreamVideo stream={status.stream} videoRef={videoRef} />
 
