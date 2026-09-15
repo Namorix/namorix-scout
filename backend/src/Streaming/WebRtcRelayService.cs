@@ -100,9 +100,16 @@ internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
         _peer = peer;
 
         var codec = camera.GetCodec();
-        var fmtp = codec is null
-            ? "packetization-mode=1;profile-level-id=42e01f"
-            : $"packetization-mode=1;profile-level-id={codec.ProfileLevelId}";
+        // The browser weighs the advertised profile-level-id against the H264 profiles it
+        // ships and silently drops the payload when it does not know the one advertised,
+        // which leaves an offer the browser answers with the video section rejected. So
+        // advertise the profile every browser has instead of the camera's own: the real
+        // parameter sets still reach the decoder in-band, via ReplayKeyFrame.
+        var fmtp = "packetization-mode=1;profile-level-id=42e01f";
+
+        logger.LogInformation(
+            "WebRTC session {sessionId}: offering H264 {fmtp} for camera {cameraId} (camera SPS profile-level-id {profile}).",
+            Id, fmtp, camera.CameraId, codec?.ProfileLevelId ?? "(none)");
 
         var track = new MediaStreamTrack(
             new List<VideoFormat>
@@ -215,6 +222,11 @@ internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
             sdp = sdp,
             type = RTCSdpType.answer,
         });
+        // The browser builds this answer from our offer, so a rejection here is the one place
+        // that says why a viewer never connects.
+        if (result != SetDescriptionResultEnum.OK)
+            logger.LogWarning("WebRTC session {sessionId}: answer rejected with {result}.", Id, result);
+
         return result == SetDescriptionResultEnum.OK;
     }
 
