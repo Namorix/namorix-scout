@@ -1,1 +1,13 @@
 @forward "@namorix/styles";
+
+// Padding the native WebView shrinks the viewport, and a :fullscreen element can never
+// escape that box — so the bars are compensated here instead.
+// Vertical edges only: the horizontal insets carry the display cutout, and the app
+// declares SHORT_EDGES cutout mode so content is meant to draw into the notch.
+.scout-root {
+  padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  padding-bottom: var(
+    --safe-area-inset-bottom,
+    env(safe-area-inset-bottom, 0px)
+  );
+}

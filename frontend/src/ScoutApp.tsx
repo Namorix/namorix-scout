@@ -13,6 +13,8 @@ import {
 import type { NmxBottomNavigationBarItemData } from "@namorix/ui"
 import "./i18n"
 import { useSessionGuard } from "@namorix/core"
+import { useAppBackButton } from "./hooks/useAppBackButton"
+import { useFullscreenReset } from "./hooks/useFullscreenReset"
 import { store } from "./store/store"
 import { CamerasView } from "./views/cameras/CamerasView"
 import { LiveView } from "./views/live/LiveView"
@@ -42,12 +44,15 @@ export const ScoutApp: React.FC = () => {
   const { t } = useTranslation()
   const guard = useSessionGuard()
 
+  useAppBackButton()
+  useFullscreenReset()
+
   if (guard.state === "loading") return <NmxLoadingOverlay />
   if (guard.state === "unauthorized") return null
 
   return (
     <Provider store={store}>
-      <NmxAddonRoot>
+      <NmxAddonRoot className="scout-root">
         <NmxToastProvider />
         <NmxTabProvider defaultTab="live">
           <NmxBottomNavigationContent<ScoutTab>
