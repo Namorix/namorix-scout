@@ -16,6 +16,7 @@
         "status": "Status",
         "enabled": "Enabled",
         "disabled": "Disabled",
+        "error": "Error",
         "url": "RTSP URL",
         "stream": "Stream",
         "record": "Recording",
@@ -26,12 +27,20 @@
         "edit": "Edit",
         "delete": "Delete"
       },
+      "state": {
+        "stopped": "Stopped",
+        "connecting": "Connecting",
+        "streaming": "Streaming",
+        "failed": "Failed"
+      },
       "info": {
         "username": "Username",
         "credentials": "Credentials",
         "credentialsSet": "Stored",
         "credentialsNone": "None",
         "createdAt": "Created",
+        "updatedAt": "Updated",
+        "lastError": "Problem",
         "none": "—",
         "yes": "Yes",
         "no": "No",

@@ -19,6 +19,31 @@ const GATHER_TIMEOUT_MS = 5_000
 const DISCONNECT_GRACE_MS = 8_000
 const RECONNECT_MIN_MS = 1_000
 const RECONNECT_MAX_MS = 5_000
+const FRAME_POLL_MS = 1_000
+const FRAME_STALL_MS = 12_000
+
+// A connected peer only means ICE finished. The camera can be perfectly reachable as a
+// server and still send nothing (dead RTSP behind the relay), which used to read as
+// "live" over a black frame. The badge follows actual media instead: the remote track
+// unmuting, or decoded frames climbing as a second opinion.
+async function decodedFrameCount(peer: RTCPeerConnection): Promise<number | null> {
+  try {
+    const report = await peer.getStats()
+    let decoded = 0
+    report.forEach((stat) => {
+      if (stat.type !== "inbound-rtp") return
+      if (stat.kind !== "video" && stat.mediaType !== "video") return
+      const value = stat.framesDecoded ?? stat.framesReceived
+      if (typeof value === "number") decoded += value
+    })
+    // Zero is the honest reading when nothing arrived. A silent camera produces no
+    // inbound-rtp entry at all — the report only gains one once RTP shows up — so
+    // treating "no entry" as "unknown" would keep it pending forever.
+    return decoded
+  } catch {
+    return null
+  }
+}
 
 function normalizeCandidate(value: string): string {
   let text = value.trim()
@@ -52,11 +77,15 @@ export class RtcStreamClient {
   private pollTimer: ReturnType<typeof setInterval> | null = null
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private graceTimer: ReturnType<typeof setTimeout> | null = null
+  private frameTimer: ReturnType<typeof setInterval> | null = null
   private visibilityBound = false
   private attempt = 0
   private degraded = false
   private runId = 0
   private disposed = false
+  private framesSeen = 0
+  private lastFrameAt = 0
+  private frameState: "pending" | "live" | "offline" = "pending"
 
   constructor(cameraId: string, callbacks: RtcStreamCallbacks) {
     this.cameraId = cameraId
@@ -113,6 +142,10 @@ export class RtcStreamClient {
 
     peer.ontrack = (ev) => {
       if (ev.track.kind !== "video") return
+      // A remote track is created muted and unmutes when media actually reaches it -
+      // the browser's own word for "video is being delivered", and the one signal that
+      // does not depend on how (or whether) getStats() reports inbound-rtp.
+      ev.track.onunmute = () => this.noteFrames(run)
       const stream = ev.streams[0] ?? new MediaStream([ev.track])
       if (this.isCurrent(run)) this.callbacks.onStream(stream)
     }
@@ -128,12 +161,7 @@ export class RtcStreamClient {
       if (!this.isCurrent(run) || this.peer !== peer) return
       const state = peer.connectionState
       if (state === "connected") {
-        this.attempt = 0
-        this.degraded = false
-        this.disarmVisibility()
-        this.clearPoll()
-        this.clearGrace()
-        this.callbacks.onState("live", null)
+        this.beginFrameWatch(run)
       } else if (state === "disconnected") {
         this.startGrace(run)
       } else if (state === "failed" || state === "closed") {
@@ -176,7 +204,7 @@ export class RtcStreamClient {
         iceState === "completed"
       ) {
         this.clearPoll()
-        this.callbacks.onState("live", null)
+        this.beginFrameWatch(run)
         return
       }
       // A hidden tab throttles this interval, so the wall-clock deadline would
@@ -198,6 +226,64 @@ export class RtcStreamClient {
         })
         .catch(() => undefined)
     }, ICE_POLL_MS)
+  }
+
+  private beginFrameWatch(run: number): void {
+    this.attempt = 0
+    this.degraded = false
+    this.disarmVisibility()
+    this.clearGrace()
+    // Both the state change and the ICE poll can land here for the same peer; the first
+    // one owns the window, so a later duplicate must not restart the stall clock.
+    if (this.frameTimer !== null) return
+
+    this.framesSeen = 0
+    this.lastFrameAt = Date.now()
+    // Media can beat the connection-state event, in which case the badge is already
+    // live and resetting it here would blink it back to connecting for a tick.
+    if (this.frameState !== "live") this.frameState = "pending"
+    this.frameTimer = window.setInterval(() => void this.checkFrames(run), FRAME_POLL_MS)
+  }
+
+  private clearFrameWatch(): void {
+    if (this.frameTimer !== null) {
+      clearInterval(this.frameTimer)
+      this.frameTimer = null
+    }
+  }
+
+  private noteFrames(run: number): void {
+    if (!this.isCurrent(run)) return
+    this.lastFrameAt = Date.now()
+    if (this.frameState === "live") return
+
+    this.frameState = "live"
+    this.callbacks.onState("live", null)
+  }
+
+  private async checkFrames(run: number): Promise<void> {
+    const peer = this.peer
+    if (!this.isCurrent(run) || peer === null) return
+
+    const decoded = await decodedFrameCount(peer)
+    if (!this.isCurrent(run) || this.peer !== peer) return
+    // Only a failed getStats() lands here; it says nothing about the stream itself.
+    if (decoded === null) return
+
+    if (decoded > this.framesSeen) {
+      this.framesSeen = decoded
+      this.noteFrames(run)
+      return
+    }
+
+    // Already reported; the loop keeps polling so a recovered camera flips back above.
+    if (this.frameState === "offline") return
+    if (Date.now() - this.lastFrameAt < FRAME_STALL_MS) return
+
+    this.frameState = "offline"
+    // Deliberately keeps the MediaStream: a stall this code wrongly infers must never
+    // blank a working picture, and the overlay badge already covers the frame.
+    this.callbacks.onState("offline", "no-frames")
   }
 
   private scheduleRetry(run: number, reason: string): void {
@@ -266,6 +352,8 @@ export class RtcStreamClient {
   private stopInternal(): void {
     this.clearPoll()
     this.clearGrace()
+    this.clearFrameWatch()
+    this.frameState = "pending"
     this.disarmVisibility()
     if (this.retryTimer !== null) {
       clearTimeout(this.retryTimer)

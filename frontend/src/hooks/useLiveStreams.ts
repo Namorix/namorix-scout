@@ -34,6 +34,11 @@ export function useLiveStreams(cameras: Camera[]): UseLiveStreamsResult {
   const [statuses, setStatuses] = useState<Record<string, StreamStatus>>({})
   const [paused, setPaused] = useState<Record<string, boolean>>({})
 
+  // Read by play() to tell a resume apart from a retry without making the callback depend
+  // on the state it writes to.
+  const statusesRef = useRef(statuses)
+  statusesRef.current = statuses
+
   const signature = cameras
     .filter((camera) => camera.enabled)
     .map((camera) => camera.id)
@@ -74,13 +79,26 @@ export function useLiveStreams(cameras: Camera[]): UseLiveStreamsResult {
   // poster — resuming needs no new offer/answer, so there is no connecting state.
   const play = useCallback((id: string) => {
     const existing = entriesRef.current.get(id)
+    const auto = existing?.auto ?? false
+
     if (existing) {
-      existing.paused = false
-      setPaused((prev) => (prev[id] ? { ...prev, [id]: false } : prev))
-      return
+      // A paused session is kept alive on purpose (poster + instant resume), so that case
+      // only clears the flag. Anything else means the button is being used as a retry, and
+      // the running client has already given up - resuming it is the no-op that used to
+      // leave the card stuck until a page reload.
+      if (existing.paused || statusesRef.current[id]?.state === "live") {
+        existing.paused = false
+        setPaused((prev) => (prev[id] ? { ...prev, [id]: false } : prev))
+        return
+      }
+
+      existing.client.dispose()
+      entriesRef.current.delete(id)
     }
+
     const client = createClient(id, setStatuses)
-    entriesRef.current.set(id, { client, auto: false, paused: false })
+    entriesRef.current.set(id, { client, auto, paused: false })
+    setPaused((prev) => (prev[id] ? { ...prev, [id]: false } : prev))
     client.start()
   }, [])
 

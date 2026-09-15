@@ -5,6 +5,10 @@ import { useAppDispatch, useAppSelector } from "../store/hooks"
 import { selectCameras } from "../store/selectors/cameraSelectors"
 import { cameraActions } from "../store/slices/cameraSlice"
 
+// Camera health lives in the ingest process, not in the row, so the list has to be re-read
+// for a failing camera to show up — and for the badge to clear once it recovers.
+const POLL_MS = 10_000
+
 export interface UseCamerasResult {
   cameras: ReturnType<typeof selectCameras>
   loading: boolean
@@ -33,6 +37,15 @@ export function useCameras(): UseCamerasResult {
 
   useEffect(() => {
     void refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    // A hidden tab throttles timers anyway; skipping keeps dead requests off the wire.
+    const timer = setInterval(() => {
+      if (document.hidden) return
+      void refresh()
+    }, POLL_MS)
+    return () => clearInterval(timer)
   }, [refresh])
 
   return { cameras, loading, loadFailed, refresh }

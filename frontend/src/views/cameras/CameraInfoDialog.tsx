@@ -60,6 +60,18 @@ export const CameraInfoDialog: React.FC<CameraInfoDialogProps> = ({
           value={yesNo(camera.enabled)}
         />
         <NmxMetaItem
+          label={t("scout.cameras.list.status")}
+          value={t(`scout.cameras.state.${camera.state}`)}
+        />
+        {camera.lastError !== null && (
+          // The card badge only carries the reason in a title attribute, which never
+          // surfaces on touch — this is where a phone user actually reads it.
+          <NmxMetaItem
+            label={t("scout.cameras.info.lastError")}
+            value={camera.lastError ?? "—"}
+          />
+        )}
+        <NmxMetaItem
           label={t("scout.cameras.list.record")}
           value={yesNo(camera.recordEnabled)}
         />
@@ -70,6 +82,10 @@ export const CameraInfoDialog: React.FC<CameraInfoDialogProps> = ({
         <NmxMetaItem
           label={t("scout.cameras.info.createdAt")}
           value={new Date(camera.createdAt).toLocaleString()}
+        />
+        <NmxMetaItem
+          label={t("scout.cameras.info.updatedAt")}
+          value={new Date(camera.lastUpdatedAt).toLocaleString()}
         />
       </NmxMetaList>
     </NmxAlertDialog>

@@ -34,7 +34,10 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
 }) => {
   const { t } = useTranslation()
   const streaming = status.state === "live"
-  const connecting = status.state === "connecting"
+  // The backend already knows the camera is dead and says so within one poll, so there
+  // is no reason to sit on a spinner for the whole frame-stall window first.
+  const cameraFailed = camera.state === "failed" && !streaming
+  const connecting = status.state === "connecting" && !cameraFailed
 
   const disabled = !camera.enabled && status.state === "idle"
 
@@ -161,7 +164,7 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
     ? { text: t("scout.live.live"), semantic: "success" as const }
     : connecting
       ? { text: t("scout.live.connecting"), semantic: "info" as const }
-      : status.state === "offline"
+      : cameraFailed || status.state === "offline"
         ? { text: t("scout.live.offline"), semantic: "error" as const }
         : disabled
           ? {

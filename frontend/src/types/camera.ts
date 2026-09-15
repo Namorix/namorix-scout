@@ -1,5 +1,11 @@
 export type CameraStreamType = "main" | "sub"
 
+export type CameraRuntimeState =
+  | "stopped"
+  | "connecting"
+  | "streaming"
+  | "failed"
+
 export interface Camera {
   id: string
   name: string
@@ -11,6 +17,10 @@ export interface Camera {
   hasCredentials: boolean
   username: string | null
   createdAt: string
+  lastUpdatedAt: string
+  state: CameraRuntimeState
+  lastError: string | null
+  lastFrameAt: string | null
 }
 
 export interface CameraUpsert {

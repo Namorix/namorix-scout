@@ -41,6 +41,14 @@ export const CameraManageCard: React.FC<CameraManageCardProps> = ({
               ? t("scout.cameras.list.recordOn")
               : t("scout.cameras.list.recordOff")}
           </NmxBadge>
+          {camera.state === "failed" && (
+            // NmxBadge takes no HTML props, so the reason rides on a wrapping span.
+            <span title={camera.lastError ?? undefined}>
+              <NmxBadge semantic="error" size="sm">
+                {t("scout.cameras.list.error")}
+              </NmxBadge>
+            </span>
+          )}
         </div>
       </div>
 
