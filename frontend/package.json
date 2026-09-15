@@ -1,6 +1,6 @@
 {
   "name": "namorix-scout",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.5.1",
+    "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.1",
+    "@capacitor/screen-orientation": "^8.0.1",
     "@floating-ui/react": "0.27.20",
     "@microsoft/signalr": "10.0.0",
     "@namorix/styles": "link:../../namorix/frontend/packages/styles",
