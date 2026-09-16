@@ -19,8 +19,9 @@ public sealed class StreamsController(WebRtcRelayService relay, CameraService ca
     [HttpPost("{cameraId:guid}/offer")]
     public async Task<IActionResult> Offer(Guid cameraId, CancellationToken ct)
     {
-        // The relay is addressed by camera id alone, so ownership is settled before it is
-        // reached: someone else's camera reads as missing, the same answer as an unknown id.
+        // The relay is addressed by camera id alone, so access is settled before it is reached:
+        // a camera shared with the caller opens like their own, and anything else reads as
+        // missing — the same answer as an unknown id.
         if (await cameras.GetAsync(cameraId, CurrentUserId, ct) is null)
             return NotFound(ApiResponse.Fail(Error.CameraNotFound));
 
