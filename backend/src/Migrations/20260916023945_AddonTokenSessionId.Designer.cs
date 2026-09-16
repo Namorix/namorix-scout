@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Namorix.Scout.Persistence;
 
@@ -10,9 +11,11 @@ using Namorix.Scout.Persistence;
 namespace Namorix.Scout.Migrations
 {
     [DbContext(typeof(ScoutDbContext))]
-    partial class ScoutDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916023945_AddonTokenSessionId")]
+    partial class AddonTokenSessionId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
@@ -90,9 +93,6 @@ namespace Namorix.Scout.Migrations
                     b.Property<string>("StreamType")
                         .IsRequired()
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

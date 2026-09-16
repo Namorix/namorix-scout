@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Namorix.Core.Middleware;
 using Namorix.Core.Responses;
 using Namorix.Scout.Constants;
 using Namorix.Scout.Dtos;
+using Namorix.Scout.Services;
 using Namorix.Scout.Streaming;
 
 namespace Namorix.Scout.Controllers;
@@ -10,11 +12,18 @@ namespace Namorix.Scout.Controllers;
 [ApiController]
 [RequireAuth]
 [Route("api/streams")]
-public sealed class StreamsController(WebRtcRelayService relay) : ControllerBase
+public sealed class StreamsController(WebRtcRelayService relay, CameraService cameras) : ControllerBase
 {
+    private int CurrentUserId => int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
     [HttpPost("{cameraId:guid}/offer")]
     public async Task<IActionResult> Offer(Guid cameraId, CancellationToken ct)
     {
+        // The relay is addressed by camera id alone, so ownership is settled before it is
+        // reached: someone else's camera reads as missing, the same answer as an unknown id.
+        if (await cameras.GetAsync(cameraId, CurrentUserId, ct) is null)
+            return NotFound(ApiResponse.Fail(Error.CameraNotFound));
+
         RtcOffer? offer;
         try
         {

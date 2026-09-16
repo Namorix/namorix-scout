@@ -18,26 +18,29 @@ public sealed class CameraService(
         "rtsps",
     };
 
-    public async Task<ScCameraDto[]> ListAsync(CancellationToken ct)
+    public async Task<ScCameraDto[]> ListAsync(int userId, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var cameras = await db.Cameras.AsNoTracking().ToListAsync(ct);
+        var cameras = await db.Cameras.AsNoTracking()
+            .Where(c => c.UserId == userId)
+            .ToListAsync(ct);
         return cameras.OrderBy(c => c.CreatedAt).Select(ToDto).ToArray();
     }
 
-    public async Task<ScCameraDto?> GetAsync(Guid id, CancellationToken ct)
+    public async Task<ScCameraDto?> GetAsync(Guid id, int userId, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var camera = await db.Cameras.AsNoTracking()
-            .SingleOrDefaultAsync(c => c.Id == id, ct);
+            .SingleOrDefaultAsync(c => c.Id == id && c.UserId == userId, ct);
         return camera is null ? null : ToDto(camera);
     }
 
-    public async Task<ScCameraDto> CreateAsync(CameraUpsertRequest request, CancellationToken ct)
+    public async Task<ScCameraDto> CreateAsync(int userId, CameraUpsertRequest request, CancellationToken ct)
     {
         var camera = new ScCamera
         {
             Id = Guid.NewGuid(),
+            UserId = userId,
             CreatedAt = DateTimeOffset.UtcNow,
         };
         Apply(camera, request);
@@ -49,10 +52,11 @@ public sealed class CameraService(
         return ToDto(camera);
     }
 
-    public async Task<ScCameraDto?> UpdateAsync(Guid id, CameraUpsertRequest request, CancellationToken ct)
+    public async Task<ScCameraDto?> UpdateAsync(Guid id, int userId, CameraUpsertRequest request,
+        CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var camera = await db.Cameras.SingleOrDefaultAsync(c => c.Id == id, ct);
+        var camera = await db.Cameras.SingleOrDefaultAsync(c => c.Id == id && c.UserId == userId, ct);
         if (camera is null) return null;
 
         Apply(camera, request);
@@ -61,10 +65,10 @@ public sealed class CameraService(
         return ToDto(camera);
     }
 
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
+    public async Task<bool> DeleteAsync(Guid id, int userId, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var camera = await db.Cameras.SingleOrDefaultAsync(c => c.Id == id, ct);
+        var camera = await db.Cameras.SingleOrDefaultAsync(c => c.Id == id && c.UserId == userId, ct);
         if (camera is null) return false;
 
         db.Cameras.Remove(camera);

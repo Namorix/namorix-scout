@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Namorix.Core.Middleware;
 using Namorix.Core.Responses;
@@ -12,14 +13,18 @@ namespace Namorix.Scout.Controllers;
 [Route("api/cameras")]
 public sealed class CamerasController(CameraService cameras) : ControllerBase
 {
+    // Every camera route is scoped to the caller. A camera owned by someone else reads as
+    // missing rather than forbidden, so the answers do not reveal that the row exists.
+    private int CurrentUserId => int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct) =>
-        Ok(ApiResponse.Ok(await cameras.ListAsync(ct)));
+        Ok(ApiResponse.Ok(await cameras.ListAsync(CurrentUserId, ct)));
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     {
-        var camera = await cameras.GetAsync(id, ct);
+        var camera = await cameras.GetAsync(id, CurrentUserId, ct);
         return camera is null
             ? NotFound(ApiResponse.Fail(Error.CameraNotFound))
             : Ok(ApiResponse.Ok(camera));
@@ -34,7 +39,7 @@ public sealed class CamerasController(CameraService cameras) : ControllerBase
 
         try
         {
-            return Ok(ApiResponse.Ok(await cameras.CreateAsync(request, ct)));
+            return Ok(ApiResponse.Ok(await cameras.CreateAsync(CurrentUserId, request, ct)));
         }
         catch (ArgumentException ex)
         {
@@ -52,7 +57,7 @@ public sealed class CamerasController(CameraService cameras) : ControllerBase
         ScCameraDto? camera;
         try
         {
-            camera = await cameras.UpdateAsync(id, request, ct);
+            camera = await cameras.UpdateAsync(id, CurrentUserId, request, ct);
         }
         catch (ArgumentException ex)
         {
@@ -66,7 +71,7 @@ public sealed class CamerasController(CameraService cameras) : ControllerBase
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
-        await cameras.DeleteAsync(id, ct)
+        await cameras.DeleteAsync(id, CurrentUserId, ct)
             ? Ok(ApiResponse.Ok())
             : NotFound(ApiResponse.Fail(Error.CameraNotFound));
 }
