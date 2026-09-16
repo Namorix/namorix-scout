@@ -28,7 +28,7 @@ public sealed class StreamsController(WebRtcRelayService relay, CameraService ca
         RtcOffer? offer;
         try
         {
-            offer = await relay.CreateAsync(cameraId, ct);
+            offer = await relay.CreateAsync(cameraId, CurrentUserId, ct);
         }
         catch (Exception ex)
         {

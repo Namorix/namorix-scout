@@ -13,6 +13,7 @@ public sealed class CameraService(
     ScoutSecretProtector secretProtector,
     CameraChangeSignal changes,
     RtspIngestService ingest,
+    WebRtcRelayService relay,
     AddonChannelClient channel,
     ILogger<CameraService> logger)
 {
@@ -175,6 +176,10 @@ public sealed class CameraService(
         db.CameraShares.Remove(share);
         await db.SaveChangesAsync(ct);
         changes.Notify();
+
+        // Revoking ends the access, so it also ends the session that access was carrying: the
+        // row is already gone, which is what makes the browser's next reconnect fail.
+        await relay.CloseViewerSessionsAsync(id, targetUserId);
         return true;
     }
 

@@ -18,13 +18,13 @@ public sealed class WebRtcRelayService(
 {
     private readonly ConcurrentDictionary<Guid, RtcViewerSession> _sessions = new();
 
-    public async Task<RtcOffer?> CreateAsync(Guid cameraId, CancellationToken ct)
+    public async Task<RtcOffer?> CreateAsync(Guid cameraId, int userId, CancellationToken ct)
     {
         var camera = ingest.GetActiveClient(cameraId);
         if (camera is null)
             return null;
 
-        var session = new RtcViewerSession(camera, logger);
+        var session = new RtcViewerSession(camera, userId, logger);
         string sdp;
         try
         {
@@ -70,9 +70,29 @@ public sealed class WebRtcRelayService(
         if (_sessions.TryRemove(sessionId, out var session))
             await session.CloseAsync();
     }
+
+    // Revoking a share has to end the session that share was granting: the viewer's peer is
+    // already carrying the stream and would otherwise keep playing until it left on its own.
+    // The browser reconnects by itself, and that next offer is refused because access is
+    // decided from the share table, which no longer names this user.
+    public async Task CloseViewerSessionsAsync(Guid cameraId, int userId)
+    {
+        var doomed = _sessions
+            .Where(entry => entry.Value.CameraId == cameraId && entry.Value.UserId == userId)
+            .Select(entry => entry.Key)
+            .ToList();
+
+        foreach (var sessionId in doomed)
+            await StopAsync(sessionId);
+
+        if (doomed.Count > 0)
+            logger.LogInformation(
+                "Access revoked: closed {count} live session(s) for user {userId} on camera {cameraId}.",
+                doomed.Count, userId, cameraId);
+    }
 }
 
-internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
+internal sealed class RtcViewerSession(CameraRtspClient camera, int userId, ILogger logger)
 {
     private const int DisconnectGraceSeconds = 15;
 
@@ -90,6 +110,10 @@ internal sealed class RtcViewerSession(CameraRtspClient camera, ILogger logger)
     private uint _lastRtpTimestamp;
 
     public Guid Id { get; } = Guid.NewGuid();
+    public Guid CameraId => camera.CameraId;
+    // Held so a revoke can pick out exactly the sessions it takes away; the relay is otherwise
+    // addressed by session id alone.
+    public int UserId { get; } = userId;
     public int PayloadType { get; private set; } = 96;
 
     public event Action? Closed;
