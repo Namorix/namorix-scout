@@ -23,6 +23,9 @@ export const CameraInfoDialog: React.FC<CameraInfoDialogProps> = ({
   const yesNo = (value: boolean) =>
     value ? t("scout.cameras.info.yes") : t("scout.cameras.info.no")
 
+  const isOwner = camera.access === "owner"
+  const canEdit = camera.access !== "view"
+
   return (
     <NmxAlertDialog
       open={open}
@@ -30,27 +33,38 @@ export const CameraInfoDialog: React.FC<CameraInfoDialogProps> = ({
       title={camera.name}
       closeLabel={t("scout.cameras.info.close")}
       confirmLabel={t("scout.cameras.list.edit")}
+      confirmShouldRender={canEdit}
       onClose={onClose}
       onConfirm={onEdit}
     >
       <NmxMetaList alignItem="end">
         <NmxMetaItem
-          label={t("scout.cameras.list.url")}
-          value={camera.rtspUrl}
-          useSelectEnabled
+          label={t("scout.cameras.access.label")}
+          value={t(`scout.cameras.access.${camera.access}`)}
         />
-        <NmxMetaItem
-          label={t("scout.cameras.info.username")}
-          value={camera.username ?? t("scout.cameras.info.none")}
-        />
-        <NmxMetaItem
-          label={t("scout.cameras.info.credentials")}
-          value={t(
-            camera.hasCredentials
-              ? "scout.cameras.info.credentialsSet"
-              : "scout.cameras.info.credentialsNone",
-          )}
-        />
+        {/* The connection rows are omitted rather than blanked: the API never sends them to a
+            share holder, so rendering them would show a "none" that is not the truth. */}
+        {isOwner && (
+          <>
+            <NmxMetaItem
+              label={t("scout.cameras.list.url")}
+              value={camera.rtspUrl ?? t("scout.cameras.info.none")}
+              useSelectEnabled
+            />
+            <NmxMetaItem
+              label={t("scout.cameras.info.username")}
+              value={camera.username ?? t("scout.cameras.info.none")}
+            />
+            <NmxMetaItem
+              label={t("scout.cameras.info.credentials")}
+              value={t(
+                camera.hasCredentials
+                  ? "scout.cameras.info.credentialsSet"
+                  : "scout.cameras.info.credentialsNone",
+              )}
+            />
+          </>
+        )}
         <NmxMetaItem
           label={t("scout.cameras.list.stream")}
           value={t(`scout.cameras.stream.${camera.streamType}`)}

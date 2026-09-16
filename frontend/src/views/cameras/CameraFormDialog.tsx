@@ -5,6 +5,7 @@ import {
   NmxAlertDialog,
   NmxFormField,
   NmxFormInput,
+  NmxInlineAlert,
   NmxSelect,
   NmxToggle,
   type NmxSelectData,
@@ -51,6 +52,8 @@ export const CameraFormDialog: React.FC<CameraFormDialogProps> = ({
   const { t } = useTranslation()
   const [form, setForm] = useState<CameraFormState>(() => initialForm(camera))
   const [busy, setBusy] = useState(false)
+  // Creating is always one's own camera; editing only reaches here for owner or manage.
+  const isOwner = camera === null || camera.access === "owner"
 
   useEffect(() => {
     if (!open) return
@@ -83,20 +86,26 @@ export const CameraFormDialog: React.FC<CameraFormDialogProps> = ({
     }
 
     const username = form.username.trim()
-    if (form.password && !username) {
+    if (isOwner && form.password && !username) {
       nmxToast.error(t("scout.cameras.errors.passwordNeedsUser"))
       return
     }
 
     const request: CameraUpsert = {
       name,
-      rtspUrl: form.rtspUrl.trim(),
-      username,
-      password: form.password,
-      streamType: form.streamType,
       enabled: form.enabled,
       recordEnabled: form.recordEnabled,
       retentionDays,
+      // The owner-only group is omitted rather than sent empty: the server refuses these
+      // fields from a manage share, empty string included, instead of quietly ignoring them.
+      ...(isOwner
+        ? {
+            rtspUrl: form.rtspUrl.trim(),
+            username,
+            password: form.password,
+            streamType: form.streamType,
+          }
+        : {}),
     }
 
     setBusy(true)
@@ -150,68 +159,78 @@ export const CameraFormDialog: React.FC<CameraFormDialogProps> = ({
           />
         </NmxFormField>
 
-        <NmxFormField
-          label={t("scout.cameras.form.urlLabel")}
-          controlId="camera-rtsp-url"
-          required
-        >
-          <NmxFormInput
-            id="camera-rtsp-url"
-            value={form.rtspUrl}
-            placeholder={t("scout.cameras.form.urlPlaceholder")}
-            onValueChange={(value) =>
-              setForm((prev) => ({ ...prev, rtspUrl: value }))
-            }
-            disabled={busy}
-          />
-        </NmxFormField>
+        {isOwner ? (
+          <>
+            <NmxFormField
+              label={t("scout.cameras.form.urlLabel")}
+              controlId="camera-rtsp-url"
+              required
+            >
+              <NmxFormInput
+                id="camera-rtsp-url"
+                value={form.rtspUrl}
+                placeholder={t("scout.cameras.form.urlPlaceholder")}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, rtspUrl: value }))
+                }
+                disabled={busy}
+              />
+            </NmxFormField>
 
-        <NmxFormField
-          label={t("scout.cameras.form.usernameLabel")}
-          controlId="camera-username"
-        >
-          <NmxFormInput
-            id="camera-username"
-            value={form.username}
-            placeholder={t("scout.cameras.form.usernamePlaceholder")}
-            onValueChange={(value) =>
-              setForm((prev) => ({ ...prev, username: value }))
-            }
-            disabled={busy}
-          />
-        </NmxFormField>
+            <NmxFormField
+              label={t("scout.cameras.form.usernameLabel")}
+              controlId="camera-username"
+            >
+              <NmxFormInput
+                id="camera-username"
+                value={form.username}
+                placeholder={t("scout.cameras.form.usernamePlaceholder")}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, username: value }))
+                }
+                disabled={busy}
+              />
+            </NmxFormField>
 
-        <NmxFormField
-          label={t("scout.cameras.form.passwordLabel")}
-          controlId="camera-password"
-          helper={
-            camera?.hasCredentials
-              ? t("scout.cameras.form.passwordHelper")
-              : undefined
-          }
-        >
-          <NmxFormInput
-            id="camera-password"
-            type="password"
-            value={form.password}
-            placeholder={t("scout.cameras.form.passwordPlaceholder")}
-            onValueChange={(value) =>
-              setForm((prev) => ({ ...prev, password: value }))
-            }
-            disabled={busy}
-          />
-        </NmxFormField>
+            <NmxFormField
+              label={t("scout.cameras.form.passwordLabel")}
+              controlId="camera-password"
+              helper={
+                camera?.hasCredentials
+                  ? t("scout.cameras.form.passwordHelper")
+                  : undefined
+              }
+            >
+              <NmxFormInput
+                id="camera-password"
+                type="password"
+                value={form.password}
+                placeholder={t("scout.cameras.form.passwordPlaceholder")}
+                onValueChange={(value) =>
+                  setForm((prev) => ({ ...prev, password: value }))
+                }
+                disabled={busy}
+              />
+            </NmxFormField>
 
-        <NmxFormField label={t("scout.cameras.form.streamLabel")}>
-          <NmxSelect<CameraStreamType>
-            value={form.streamType}
-            options={streamOptions}
-            onChange={(value) =>
-              setForm((prev) => ({ ...prev, streamType: value }))
-            }
-            disabled={busy}
+            <NmxFormField label={t("scout.cameras.form.streamLabel")}>
+              <NmxSelect<CameraStreamType>
+                value={form.streamType}
+                options={streamOptions}
+                onChange={(value) =>
+                  setForm((prev) => ({ ...prev, streamType: value }))
+                }
+                disabled={busy}
+              />
+            </NmxFormField>
+          </>
+        ) : (
+          // Where the camera points, and the account it is dialled with, are not the share
+          // holder's to see or change — the server would refuse the request outright.
+          <NmxInlineAlert
+            message={t("scout.cameras.form.connectionOwnerOnly")}
           />
-        </NmxFormField>
+        )}
 
         <NmxFormField
           label={t("scout.cameras.form.retentionLabel")}

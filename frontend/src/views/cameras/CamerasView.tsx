@@ -24,6 +24,7 @@ import { CameraErrorCodes } from "../live/CameraErrorCodes"
 import { CameraFormDialog } from "./CameraFormDialog"
 import { CameraInfoDialog } from "./CameraInfoDialog"
 import { CameraManageCard } from "./CameraManageCard"
+import { CameraShareDialog } from "./CameraShareDialog"
 import "./CamerasView.scss"
 
 type FormTarget = { mode: "create" } | { mode: "edit"; camera: Camera }
@@ -35,6 +36,7 @@ export const CamerasView: React.FC = () => {
   const [formTarget, setFormTarget] = useState<FormTarget | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Camera | null>(null)
   const [infoTarget, setInfoTarget] = useState<Camera | null>(null)
+  const [shareTarget, setShareTarget] = useState<Camera | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   const editingCamera = formTarget?.mode === "edit" ? formTarget.camera : null
@@ -113,6 +115,7 @@ export const CamerasView: React.FC = () => {
                     onInfo={() => setInfoTarget(camera)}
                     onEdit={() => setFormTarget({ mode: "edit", camera })}
                     onDelete={() => setDeleteTarget(camera)}
+                    onShare={() => setShareTarget(camera)}
                   />
                 </div>
               ))}
@@ -134,6 +137,12 @@ export const CamerasView: React.FC = () => {
               if (infoTarget)
                 setFormTarget({ mode: "edit", camera: infoTarget })
             }}
+          />
+
+          <CameraShareDialog
+            open={shareTarget !== null}
+            camera={shareTarget}
+            onClose={() => setShareTarget(null)}
           />
 
           <NmxAlertDialog

@@ -1,7 +1,12 @@
 import { ApiError } from "@namorix/core"
 import { coreConfig } from "../config/coreConfig"
 import { ScoutApiRoutes } from "../scoutApiRoutes"
-import type { Camera, CameraUpsert } from "../types/camera"
+import type {
+  Camera,
+  CameraShare,
+  CameraShareRequest,
+  CameraUpsert,
+} from "../types/camera"
 
 async function list(): Promise<Camera[]> {
   const data = await coreConfig.http
@@ -47,10 +52,44 @@ async function remove(id: string): Promise<void> {
   if (!data.success) throw ApiError.fromResponse(data)
 }
 
+async function listShares(id: string): Promise<CameraShare[]> {
+  const data = await coreConfig.http
+    .url(`${coreConfig.getApiBaseUrl()}${ScoutApiRoutes.cameraShares(id)}`)
+    .get()
+    .json<CameraShare[]>()
+  if (!data.success) throw ApiError.fromResponse(data)
+  return data.data
+}
+
+async function addShare(
+  id: string,
+  request: CameraShareRequest,
+): Promise<CameraShare> {
+  const data = await coreConfig.http
+    .url(`${coreConfig.getApiBaseUrl()}${ScoutApiRoutes.cameraShares(id)}`)
+    .post(request)
+    .json<CameraShare>()
+  if (!data.success) throw ApiError.fromResponse(data)
+  return data.data
+}
+
+async function removeShare(id: string, userId: number): Promise<void> {
+  const data = await coreConfig.http
+    .url(
+      `${coreConfig.getApiBaseUrl()}${ScoutApiRoutes.cameraShareByUser(id, userId)}`,
+    )
+    .delete()
+    .json<null>()
+  if (!data.success) throw ApiError.fromResponse(data)
+}
+
 export const cameraController = {
   list,
   get,
   create,
   update,
   remove,
+  listShares,
+  addShare,
+  removeShare,
 }

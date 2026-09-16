@@ -12,6 +12,12 @@
       "refresh": "Refresh",
       "retry": "Retry",
       "empty": "No cameras yet. Add your first camera to get started.",
+      "access": {
+        "label": "Access",
+        "owner": "Owner",
+        "manage": "Shared · manage",
+        "view": "Shared · view only"
+      },
       "list": {
         "status": "Status",
         "enabled": "Enabled",
@@ -25,6 +31,7 @@
         "recordOff": "Off",
         "info": "Info",
         "edit": "Edit",
+        "share": "Share",
         "delete": "Delete"
       },
       "state": {
@@ -69,7 +76,27 @@
         "retentionPlaceholder": "7",
         "save": "Save",
         "cancel": "Cancel",
-        "saved": "Camera saved"
+        "saved": "Camera saved",
+        "connectionOwnerOnly": "Only the owner can see or change the RTSP address, stream type and credentials."
+      },
+      "share": {
+        "title": "Share - {{name}}",
+        "personLabel": "Person",
+        "personPlaceholder": "Choose someone",
+        "usersLoadFailed": "Could not load people",
+        "permissionLabel": "Permission",
+        "permission": {
+          "view": "View only",
+          "manage": "Can manage"
+        },
+        "current": "People with access",
+        "loadFailed": "Could not load who has access",
+        "empty": "Not shared with anyone yet.",
+        "user": "User #{{id}}",
+        "add": "Add",
+        "added": "Camera shared",
+        "revoke": "Revoke",
+        "revoked": "Access revoked"
       },
       "delete": {
         "title": "Delete camera",
@@ -82,7 +109,9 @@
         "retentionRange": "Retention must be between 1 and 365",
         "cameraNotFound": "Camera not found",
         "loadFailed": "Could not load cameras",
-        "passwordNeedsUser": "Username is required when a password is set"
+        "passwordNeedsUser": "Username is required when a password is set",
+        "invalidInput": "That request was refused",
+        "desktopUnreachable": "Could not reach the desktop"
       }
     },
     "live": {

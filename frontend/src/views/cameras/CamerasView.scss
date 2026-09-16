@@ -70,3 +70,48 @@
   justify-content: flex-end;
   gap: var(--nmx-spacing-sm);
 }
+
+.scout-share-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nmx-spacing-md);
+  margin-top: var(--nmx-spacing-lg);
+}
+
+.scout-share-list__title {
+  font-size: var(--nmx-font-size-sm);
+  font-weight: var(--nmx-font-weight-bold);
+  color: var(--nmx-color-on-surface);
+}
+
+.scout-share-list__empty {
+  font-size: var(--nmx-font-size-sm);
+  color: var(--nmx-color-warning);
+}
+
+.scout-share-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nmx-spacing-sm);
+  padding: var(--nmx-spacing-sm) var(--nmx-spacing-md);
+  background-color: var(--nmx-color-surface-low);
+  border-radius: var(--nmx-radius-md);
+}
+
+.scout-share-row__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.scout-share-row__user {
+  font-size: var(--nmx-font-size-sm);
+  color: var(--nmx-color-on-surface);
+}
+
+.scout-share-row__permission {
+  font-size: var(--nmx-font-size-sm);
+  color: var(--nmx-color-on-surface-variant);
+}
