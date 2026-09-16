@@ -3,7 +3,7 @@
   "id": "namorix-scout",
   "name": "Scout",
   "description": "Smart camera monitoring for your home",
-  "version": "0.8.1",
+  "version": "0.10.0",
   "category": "media",
   "icon": "https://raw.githubusercontent.com/Namorix/namorix-scout/refs/heads/main/assets/icon.svg",
   "author": "IzeroCs",
@@ -22,6 +22,6 @@
   ],
 
   "boot": "manual",
-  "minCoreVersion": "0.36.0",
-  "minServerVersion": "0.38.0"
+  "minCoreVersion": "0.70.0",
+  "minServerVersion": "0.87.0"
 }
