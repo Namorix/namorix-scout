@@ -10,7 +10,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "NMX_DESKTOP_API_URL": "http://localhost:5000",
         "NMX_DESKTOP_GRPC_URL": "http://localhost:5001",
-        "NMX_REGISTRATION_TOKEN": "306b95582a354467a65c033d633b0e1a"
+        "NMX_REGISTRATION_TOKEN": "24f1bc647a2c4f53929d308885d731ab"
       }
     },
     "https": {
