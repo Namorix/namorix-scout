@@ -24,7 +24,6 @@ public sealed class CameraRtspClient : IAsyncDisposable
     private readonly ILogger _logger;
     private readonly ILogger<RtspListener> _listenerLogger;
     private readonly CancellationTokenSource _cts = new();
-    private readonly CodecState _codec = new();
     private readonly FrameStats _stats = new();
 
     private readonly Lock _stateGate = new();
@@ -106,8 +105,6 @@ public sealed class CameraRtspClient : IAsyncDisposable
             return _cameraName;
         }
     }
-
-    public H264CodecSnapshot? GetCodec() => _codec.Get();
 
     public CameraRuntimeStatus GetStatus()
     {
@@ -606,62 +603,7 @@ public sealed class CameraRtspClient : IAsyncDisposable
             _lastError = null;
         }
 
-        foreach (var nal in frame.Nals)
-        {
-            switch (nal[0] & 0x1F)
-            {
-                case 7:
-                    _codec.SetSps(nal);
-                    break;
-                case 8:
-                    _codec.SetPps(nal);
-                    break;
-            }
-        }
-
         FrameReceived?.Invoke(frame);
-    }
-
-    private sealed class CodecState
-    {
-        private readonly Lock _gate = new();
-        private byte[]? _sps;
-        private byte[]? _pps;
-
-        public void SetSps(byte[] nal)
-        {
-            lock (_gate)
-            {
-                _sps = nal.ToArray();
-            }
-        }
-
-        public void SetPps(byte[] nal)
-        {
-            lock (_gate)
-            {
-                _pps = nal.ToArray();
-            }
-        }
-
-        public H264CodecSnapshot? Get()
-        {
-            lock (_gate)
-            {
-                if (_sps is null || _pps is null || _sps.Length < 4)
-                    return null;
-
-                var profileLevelId = Convert.ToHexString(_sps.AsSpan(1, 3)).ToLowerInvariant();
-                return new H264CodecSnapshot
-                {
-                    Sps = _sps,
-                    Pps = _pps,
-                    ProfileLevelId = profileLevelId,
-                    SpropParameterSets =
-                        $"{Convert.ToBase64String(_sps)},{Convert.ToBase64String(_pps)}",
-                };
-            }
-        }
     }
 
     private sealed class FrameStats

@@ -13,7 +13,6 @@ public sealed class CameraService(
     ScoutSecretProtector secretProtector,
     CameraChangeSignal changes,
     RtspIngestService ingest,
-    WebRtcRelayService relay,
     AddonChannelClient channel,
     ILogger<CameraService> logger)
 {
@@ -177,9 +176,8 @@ public sealed class CameraService(
         await db.SaveChangesAsync(ct);
         changes.Notify();
 
-        // Revoking ends the access, so it also ends the session that access was carrying: the
-        // row is already gone, which is what makes the browser's next reconnect fail.
-        await relay.CloseViewerSessionsAsync(id, targetUserId);
+        // The stream needs nothing here: the row is already gone, so the viewer's next
+        // playlist request no longer finds a share and 404s.
         return true;
     }
 
