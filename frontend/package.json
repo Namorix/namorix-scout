@@ -1,6 +1,6 @@
 {
   "name": "namorix-scout",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,6 +21,7 @@
     "@namorix/styles": "link:../../namorix/frontend/packages/styles",
     "@namorix/ui": "link:../../namorix/frontend/packages/ui",
     "@reduxjs/toolkit": "2.12.0",
+    "hls.js": "^1.7.3",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-redux": "9.3.0"
