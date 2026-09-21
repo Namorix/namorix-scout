@@ -1,32 +1,23 @@
 import React, { useEffect, useRef } from "react"
 
 interface StreamVideoProps {
-  stream: MediaStream | null
   className?: string
-  videoRef?: React.RefObject<HTMLVideoElement | null>
+  videoRef?: React.Ref<HTMLVideoElement>
 }
 
-export const StreamVideo: React.FC<StreamVideoProps> = ({
-  stream,
-  className,
-  videoRef,
-}) => {
+// The element is handed to the stream client, which owns the MediaSource it plays - this
+// component only renders the tag and keeps playback alive across tab switches.
+export const StreamVideo: React.FC<StreamVideoProps> = ({ className, videoRef }) => {
   const ownRef = useRef<HTMLVideoElement | null>(null)
   const ref = videoRef ?? ownRef
 
-  useEffect(() => {
-    const video = ref.current
-    if (!video) return
-    video.srcObject = stream
-    if (stream) void video.play().catch(() => undefined)
-  }, [stream, ref])
-
-  // Browsers pause a playing element when the tab is hidden; resume it on return.
+  // Browsers pause a playing element when the tab is hidden; resume it on return. The
+  // client feed is live, so there is nothing to seek - the video picks up at the edge.
   useEffect(() => {
     const resume = () => {
       if (document.visibilityState !== "visible") return
       const video = ref.current
-      if (!video || !video.srcObject || !video.paused) return
+      if (!video || !video.paused) return
       void video.play().catch(() => undefined)
     }
 

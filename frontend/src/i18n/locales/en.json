@@ -19,6 +19,7 @@
         "view": "Shared · view only"
       },
       "list": {
+        "active": "Active",
         "status": "Status",
         "enabled": "Enabled",
         "disabled": "Disabled",
@@ -29,6 +30,7 @@
         "retention": "Retention (days)",
         "recordOn": "On",
         "recordOff": "Off",
+        "state": "State",
         "info": "Info",
         "edit": "Edit",
         "share": "Share",
@@ -124,7 +126,14 @@
       "play": "Play",
       "stop": "Stop",
       "fullscreen": "Fullscreen",
-      "exitFullscreen": "Exit fullscreen"
+      "exitFullscreen": "Exit fullscreen",
+      "reason": {
+        "streamOffline": "Could not start the stream.",
+        "timeout": "The camera did not answer in time.",
+        "hlsNetwork": "Lost the video connection.",
+        "hlsMedia": "This browser could not play the video.",
+        "noFrames": "Streaming, but the camera has stopped sending video."
+      }
     },
     "errors": {
       "generic": "Something went wrong"

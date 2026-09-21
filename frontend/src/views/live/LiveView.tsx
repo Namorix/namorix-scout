@@ -18,7 +18,7 @@ import "./LiveView.scss"
 export const LiveView: React.FC = () => {
   const { t } = useTranslation()
   const { cameras, loading, loadFailed, refresh } = useCameras()
-  const { statuses, paused, play, stop } = useLiveStreams(cameras)
+  const { statuses, paused, play, stop, attachVideo } = useLiveStreams(cameras)
 
   const statusOf = (id: string) => statuses[id] ?? IDLE
   const pausedOf = (id: string) => paused[id] ?? false
@@ -57,6 +57,7 @@ export const LiveView: React.FC = () => {
                     paused={pausedOf(camera.id)}
                     onPlay={() => play(camera.id)}
                     onStop={() => stop(camera.id)}
+                    onAttachVideo={(video) => attachVideo(camera.id, video)}
                   />
                 </div>
               ))}

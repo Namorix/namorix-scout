@@ -3,10 +3,18 @@ import { useTranslation } from "react-i18next"
 import {
   NmxBadge,
   NmxButton,
+  NmxCard,
+  NmxCardBody,
+  NmxCardFooter,
+  NmxCardHeader,
   NmxIconFont,
   NmxIconFontSymbol,
+  NmxMetaItem,
+  NmxMetaList,
+  type NmxSemanticColor,
 } from "@namorix/ui"
-import type { Camera } from "../../types/camera"
+import type { Camera, CameraRuntimeState } from "../../types/camera"
+import type { TFunction } from "@namorix/core"
 
 interface CameraManageCardProps {
   camera: Camera
@@ -14,6 +22,31 @@ interface CameraManageCardProps {
   onEdit: () => void
   onDelete: () => void
   onShare: () => void
+}
+
+function renderStateBadge(state: CameraRuntimeState, t: TFunction) {
+  let semantic: NmxSemanticColor = "fatal"
+  let title = t("scout.cameras.list.error")
+
+  if (state === "failed") {
+    semantic = "error"
+    title = t("scout.cameras.state.failed")
+  } else if (state === "connecting") {
+    semantic = "info"
+    title = t("scout.cameras.state.connecting")
+  } else if (state === "stopped") {
+    semantic = "warning"
+    title = t("scout.cameras.state.stopped")
+  } else if (state === "streaming") {
+    semantic = "success"
+    title = t("scout.cameras.state.streaming")
+  }
+
+  return (
+    <NmxBadge semantic={semantic} size="sm">
+      {title}
+    </NmxBadge>
+  )
 }
 
 export const CameraManageCard: React.FC<CameraManageCardProps> = ({
@@ -27,78 +60,72 @@ export const CameraManageCard: React.FC<CameraManageCardProps> = ({
   const isOwner = camera.access === "owner"
 
   return (
-    <div className="scout-camera-card">
-      <div className="scout-camera-card__head">
-        <span className="scout-camera-card__name" title={camera.name}>
-          {camera.name}
-        </span>
-        <div className="scout-camera-card__badges">
-          {camera.access !== "owner" && (
-            <NmxBadge semantic="info" size="sm">
-              {t(`scout.cameras.access.${camera.access}`)}
+    <NmxCard spacing="md">
+      <NmxCardHeader title={camera.name} />
+      <NmxCardBody>
+        <NmxMetaList alignItem="end">
+          {camera.rtspUrl && (
+            <NmxMetaItem
+              label={t("scout.cameras.list.url")}
+              value={camera.rtspUrl ?? "_"}
+              useSelectEnabled
+            />
+          )}
+          <NmxMetaItem
+            label={t("scout.cameras.list.stream")}
+            value={t(`scout.cameras.stream.${camera.streamType}`)}
+          />
+          <NmxMetaItem label={t("scout.cameras.list.active")}>
+            <NmxBadge
+              semantic={camera.enabled ? "success" : "default"}
+              size="sm"
+            >
+              {camera.enabled
+                ? t("scout.cameras.list.enabled")
+                : t("scout.cameras.list.disabled")}
             </NmxBadge>
-          )}
-          <NmxBadge semantic={camera.enabled ? "success" : "default"} size="sm">
-            {camera.enabled
-              ? t("scout.cameras.list.enabled")
-              : t("scout.cameras.list.disabled")}
-          </NmxBadge>
-          <NmxBadge
-            semantic={camera.recordEnabled ? "info" : "default"}
-            size="sm"
+          </NmxMetaItem>
+          <NmxMetaItem label={t("scout.cameras.list.state")}>
+            {renderStateBadge(camera.state, t)}
+          </NmxMetaItem>
+          <NmxMetaItem
+            shouldRender={camera.access !== "owner"}
+            label={t("scout.cameras.list.share")}
           >
-            {camera.recordEnabled
-              ? t("scout.cameras.list.recordOn")
-              : t("scout.cameras.list.recordOff")}
-          </NmxBadge>
-          {camera.state === "failed" && (
-            // NmxBadge takes no HTML props, so the reason rides on a wrapping span.
-            <span title={camera.lastError ?? undefined}>
-              <NmxBadge semantic="error" size="sm">
-                {t("scout.cameras.list.error")}
-              </NmxBadge>
-            </span>
-          )}
-        </div>
-      </div>
+            <NmxBadge
+              semantic={camera.access === "view" ? "info" : "success"}
+              size="sm"
+            >
+              {camera.access === "view"
+                ? t("scout.cameras.share.permission.view")
+                : t("scout.cameras.share.permission.manage")}
+            </NmxBadge>
+          </NmxMetaItem>
+          <NmxMetaItem label={t("scout.cameras.list.record")}>
+            <NmxBadge
+              semantic={camera.recordEnabled ? "success" : "error"}
+              size="sm"
+            >
+              {camera.recordEnabled
+                ? t("scout.cameras.list.recordOn")
+                : t("scout.cameras.list.recordOff")}
+            </NmxBadge>
+          </NmxMetaItem>
+          <NmxMetaItem
+            label={t("scout.cameras.list.retention")}
+            value={String(camera.retentionDays)}
+          />
+        </NmxMetaList>
+      </NmxCardBody>
 
-      <div className="scout-camera-card__meta">
-        {camera.rtspUrl !== null && (
-          <div className="scout-camera-card__row">
-            <span className="scout-camera-card__label">
-              {t("scout.cameras.list.url")}
-            </span>
-            <span className="scout-camera-card__value" title={camera.rtspUrl}>
-              {camera.rtspUrl}
-            </span>
-          </div>
-        )}
-        <div className="scout-camera-card__row">
-          <span className="scout-camera-card__label">
-            {t("scout.cameras.list.stream")}
-          </span>
-          <span className="scout-camera-card__value">
-            {t(`scout.cameras.stream.${camera.streamType}`)}
-          </span>
-        </div>
-        <div className="scout-camera-card__row">
-          <span className="scout-camera-card__label">
-            {t("scout.cameras.list.retention")}
-          </span>
-          <span className="scout-camera-card__value">
-            {camera.retentionDays}
-          </span>
-        </div>
-      </div>
-
-      <div className="scout-camera-card__actions">
+      <NmxCardFooter alignHorizontal="end" spacingBottom="md">
         <NmxButton
           variant="ghost"
           semantic="info"
           title={t("scout.cameras.list.info")}
           onClick={onInfo}
         >
-          <NmxIconFont symbol={NmxIconFontSymbol.INFO} size="md" />
+          <NmxIconFont symbol={NmxIconFontSymbol.INFO} size="lg" />
         </NmxButton>
         {camera.access !== "view" && (
           <NmxButton
@@ -107,7 +134,7 @@ export const CameraManageCard: React.FC<CameraManageCardProps> = ({
             title={t("scout.cameras.list.edit")}
             onClick={onEdit}
           >
-            <NmxIconFont symbol={NmxIconFontSymbol.EDIT} size="md" />
+            <NmxIconFont symbol={NmxIconFontSymbol.EDIT} size="lg" />
           </NmxButton>
         )}
         {isOwner && (
@@ -118,7 +145,7 @@ export const CameraManageCard: React.FC<CameraManageCardProps> = ({
               title={t("scout.cameras.list.share")}
               onClick={onShare}
             >
-              <NmxIconFont symbol={NmxIconFontSymbol.SHARE} size="md" />
+              <NmxIconFont symbol={NmxIconFontSymbol.SHARE} size="lg" />
             </NmxButton>
             <NmxButton
               variant="ghost"
@@ -126,11 +153,11 @@ export const CameraManageCard: React.FC<CameraManageCardProps> = ({
               title={t("scout.cameras.list.delete")}
               onClick={onDelete}
             >
-              <NmxIconFont symbol={NmxIconFontSymbol.DELETE} size="md" />
+              <NmxIconFont symbol={NmxIconFontSymbol.DELETE} size="lg" />
             </NmxButton>
           </>
         )}
-      </div>
-    </div>
+      </NmxCardFooter>
+    </NmxCard>
   )
 }

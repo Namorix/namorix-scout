@@ -9,7 +9,7 @@ import {
   NmxIconFontSymbol,
   NmxSpinner,
 } from "@namorix/ui"
-import type { StreamStatus } from "../../streaming/RtcStreamClient"
+import type { StreamStatus } from "../../streaming/HlsStreamClient"
 import type { Camera } from "../../types/camera"
 import { usePinchZoom } from "../../hooks/usePinchZoom"
 import { exitFullscreen } from "../../utils/fullscreen"
@@ -21,9 +21,20 @@ interface CameraLiveCardProps {
   paused: boolean
   onPlay: () => void
   onStop: () => void
+  onAttachVideo: (video: HTMLVideoElement | null) => void
 }
 
 const CONTROLS_HIDE_MS = 3_000
+
+// Why a session stopped is the only thing separating "your camera is dark" from "the
+// desktop cannot reach it" - both settle on the same Offline badge otherwise.
+const REASON_KEYS: Record<string, string> = {
+  "stream-offline": "scout.live.reason.streamOffline",
+  timeout: "scout.live.reason.timeout",
+  "hls-network": "scout.live.reason.hlsNetwork",
+  "hls-media": "scout.live.reason.hlsMedia",
+  "no-frames": "scout.live.reason.noFrames",
+}
 
 export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
   camera,
@@ -31,6 +42,7 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
   paused,
   onPlay,
   onStop,
+  onAttachVideo,
 }) => {
   const { t } = useTranslation()
   const streaming = status.state === "live"
@@ -43,14 +55,24 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
-  // <video> clears its frame once the track ends, so on pause we capture the last
+  // <video> clears its frame once the source ends, so on pause we capture the last
   // frame at Stop and reuse it as the poster.
   const [poster, setPoster] = useState<string | null>(null)
 
   // The session stays alive while paused, so only drop the poster once we are live again.
   useEffect(() => {
-    if (!paused && status.stream) setPoster(null)
-  }, [paused, status.stream])
+    if (!paused && streaming) setPoster(null)
+  }, [paused, streaming])
+
+  // One callback ref, two owners: the pinch-zoom hook wants the object, the stream client
+  // wants the element.
+  const setVideo = useCallback(
+    (video: HTMLVideoElement | null) => {
+      videoRef.current = video
+      onAttachVideo(video)
+    },
+    [onAttachVideo],
+  )
 
   const showPoster = paused && poster !== null
   // Only show the badge when there is no captured image — keep the poster while paused.
@@ -160,6 +182,11 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
     onStop()
   }
 
+  // Only worth reading once the card has stopped trying - while connecting, the spinner is
+  // the whole message and a reason would just flicker under it.
+  const reasonKey = status.reason ? REASON_KEYS[status.reason] : undefined
+  const reasonLabel = !connecting && reasonKey ? t(reasonKey) : null
+
   const stateLabel = streaming
     ? { text: t("scout.live.live"), semantic: "success" as const }
     : connecting
@@ -186,7 +213,7 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
           if (event.touches.length === 1) revealControls(true)
         }}
       >
-        <StreamVideo stream={status.stream} videoRef={videoRef} />
+        <StreamVideo videoRef={setVideo} />
 
         {showPoster && (
           <img className="scout-live-card__poster" src={poster} alt="" />
@@ -197,9 +224,14 @@ export const CameraLiveCard: React.FC<CameraLiveCardProps> = ({
             {connecting ? (
               <NmxSpinner size="md" />
             ) : (
-              <NmxBadge semantic={stateLabel.semantic} size="sm">
-                {stateLabel.text}
-              </NmxBadge>
+              <div className="scout-live-card__notice">
+                <NmxBadge semantic={stateLabel.semantic} size="sm">
+                  {stateLabel.text}
+                </NmxBadge>
+                {reasonLabel && (
+                  <p className="scout-live-card__reason">{reasonLabel}</p>
+                )}
+              </div>
             )}
           </div>
         )}
