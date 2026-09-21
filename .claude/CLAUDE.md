@@ -24,12 +24,13 @@ The camera/video pipeline is a **hard architectural decision**: everything (RTSP
 | SignalR | Frontend ↔ backend realtime events. Client dep is present; wire it up per feature. |
 | Module Federation remote | Frontend exposes `./Addon`; `react`, `react-dom`, `i18next`, `react-i18next` shared as singletons. |
 | Shared packages, never duplicated | Consume `@namorix/core`, `@namorix/ui`, `@namorix/styles` from the sibling `namorix` repo via `link:` — never vendor copies. |
-| Camera stack is .NET-native | No MediaMTX / external media binary. RTSP ingest + WebRTC relay + fMP4 recording are Scout's own C# code (SharpRTSP + SIPSorcery + SharpMP4). |
+| Camera stack is .NET-native | No MediaMTX / external media binary. RTSP ingest + HLS packaging + fMP4 recording are Scout's own C# code (SharpRTSP + SharpMP4). |
+| HLS is the only live transport | WebRTC was removed in 0.12.0 — it had no STUN/TURN, so it only worked inside the LAN and spun forever on 5G. Every network now goes through `live.m3u8` + hls.js. Do not reintroduce an ICE path without ICE servers. |
 
 ## Tech Stack
 
 - **Frontend:** Vite 8 + React 19 + TypeScript, Module Federation, Redux Toolkit, i18next, SignalR client, SCSS via `@namorix/styles`
-- **Backend:** ASP.NET Core 10 (C#), gRPC addon channel, OAuth2 client, JWT. Camera stack: `SharpRTSP` (RTSP ingest), `SIPSorcery` (WebRTC live), `SharpMP4` (fMP4 recording)
+- **Backend:** ASP.NET Core 10 (C#), gRPC addon channel, OAuth2 client, JWT. Camera stack: `SharpRTSP` (RTSP ingest), `SharpMP4` (fMP4 segment + recording)
 - **Shared packages (sibling repo):** `@namorix/core`, `@namorix/ui`, `@namorix/styles` at `../../namorix/frontend/packages/*`
 - **Backend core (sibling repo):** `Namorix.Core` at `../../../namorix/backend/src/Namorix.Core`
 
@@ -38,7 +39,7 @@ The camera/video pipeline is a **hard architectural decision**: everything (RTSP
 | Package | Can Import |
 |---------|------------|
 | `frontend/` | `@namorix/core`, `@namorix/ui`, `@namorix/styles`, React ecosystem |
-| `backend/` | ASP.NET Core, `Namorix.Core`, gRPC, JWT, camera libs (SharpRTSP/SIPSorcery/SharpMP4) |
+| `backend/` | ASP.NET Core, `Namorix.Core`, gRPC, JWT, camera libs (SharpRTSP/SharpMP4) |
 
 Never reach into desktop-internal modules; always go through the shared packages above.
 
@@ -81,9 +82,10 @@ cd frontend && pnpm docker:prod   # docker compose down && up --build
 
 `frontend/.env`: `ADDON_FRONTEND_PORT=5302`, `ADDON_BACKEND_PORT=5300`, `ADDON_HOST=http://localhost`. Dev server proxies `/.well-known` to the backend. `@namorix/ui`/`@namorix/styles` point at package **source** (`main: ./src/index.ts`) — no rebuild needed to consume new primitives.
 
-## Current Status (v0.6.0)
+## Current Status (v0.12.0)
 
-Camera live pipeline qua Phases 1–5. Backend: session-auth skeleton (`ScoutService` gRPC ready ping, `ScoutHub` `/hubs/scout`, cookie `nmx_scout_session`) + `ScCamera` CRUD REST `/api/cameras` (cred tách userinfo, mã hoá DataProtection — không trả pass) + ingest: `RtspIngestService` reconcile camera enabled mỗi 5s → `CameraRtspClient` (SharpRTSP) → `H264Depacketizer` (NAL frames) → `WebRtcRelayService` (SIPSorcery) relay (grace 15s cho ICE `disconnected` + cache IDR replay cho viewer mới), signaling REST `/api/streams/*`. Frontend (`ScoutApp` bottom-nav Cameras/Live/Settings, `NmxAddonRoot` + `NmxTabProvider`, default tab `live`): tab **Cameras** = camera manager UI (`views/cameras/`, add/edit/delete `NmxAlertDialog` + info dialog + toast); tab **Live** = chỉ xem, WebRTC grid (`NmxGrid`, `RtcStreamClient` auto-reconnect + resume theo visibility, per-camera session, auto-play camera enabled, state self-derive phía client — chưa SignalR push) với controls kiểu YouTube + pause **giữ nguyên phiên WebRTC** (cờ `paused` tách khỏi `StreamStatus`, poster chụp lúc Stop → resume tức thì) + nút **fullscreen** (Fullscreen API áp lên container, chỉ Chrome/Android — bỏ qua iOS); Settings placeholder. Chưa làm: recording (Phase 6 fMP4), timeline/playback (7–8), motion (9).
+Camera live pipeline, HLS-only. Backend: session-auth skeleton (`ScoutService` gRPC ready ping, `ScoutHub` `/hubs/scout`, cookie `nmx_scout_session`) + `ScCamera` CRUD REST `/api/cameras` (cred tách userinfo, mã hoá DataProtection — không trả pass; `access` owner/manage/view, chia sẻ qua `/api/cameras/{id}/shares`) + `/api/users` (tra user qua addon channel) + ingest: `RtspIngestService` reconcile camera enabled mỗi 5s → `CameraRtspClient` (SharpRTSP) → `H264Depacketizer` (NAL frames) → `HlsPackagerRegistry`/`HlsPackager` (SharpMP4 `FragmentedMp4Builder`, ring buffer RAM) → `HlsController`: `GET /api/cameras/{id}/live.m3u8` + `init.mp4` + `seg{n}.m4s`. Frontend (`ScoutApp` bottom-nav Cameras/Live/Settings, `NmxAddonRoot` + `NmxTabProvider`, default tab `live`): tab **Cameras** = camera manager UI (`views/cameras/`, add/edit/delete `NmxAlertDialog` + info dialog + share dialog + toast); tab **Live** = chỉ xem, grid `NmxGrid` phát bằng `HlsStreamClient` (hls.js nạp động, `xhrSetup` gửi cookie phiên; chờ playlist có segment trước khi `loadSource`; watchdog `no-frames` theo `video.currentTime`) + controls kiểu YouTube + pause cờ `paused` + nút **fullscreen** (Fullscreen API áp lên container, chỉ Chrome/Android — bỏ qua iOS); Settings placeholder. Chưa làm: recording (fMP4), timeline/playback, motion.
+`HlsStreamClient` **tự retry** mọi lỗi với backoff 3s → cap 30s (nút Play reset về 0) — trước đây offline là điểm dừng, chỉ Play tay/F5 mới sống lại. `Program.cs` ghim `NMX_DATA_DIR` **tuyệt đối** trước `NmxAddonConfig.FromEnvironment()` rồi `SetCurrentDirectory` sang `data/hls`: SharpMP4 ghi file scratch vào CWD và không cho đổi đích, mà `NmxOAuth2Client.CredentialsFile` lại resolve lazy theo CWD — quên ghim là `oauth.json` rơi vào `data/hls/data/` và addon đăng ký lại mỗi boot. `HlsScratchCleanupService` dọn file scratch cũ hơn 7 ngày (quét lúc start + mỗi ngày).
 
 ---
 
@@ -163,7 +165,7 @@ frontend — allowed to import:
 backend (ASP.NET Core) — allowed to import:
 - ASP.NET Core ecosystem
 - Namorix.Core (sibling repo)
-- camera libs (SharpRTSP, SIPSorcery, SharpMP4) — only in backend Streaming/
+- camera libs (SharpRTSP, SharpMP4) — only in backend Streaming/
 ```
 
 - Enforce via ESLint/import plugin to ban cross-package boundaries
@@ -365,7 +367,7 @@ backend/
     ├── Hubs/ScoutHub.cs
     ├── Persistence/ScoutDbContext.cs (+ factory)
     ├── Services/ScoutService.cs   # gRPC addon channel handler (AddonHostedServiceBase)
-    └── # future: Streaming/ (RtspIngestService, WebRtcRelayService, RecordingWriterService, PlaybackController),
+    └── # future: Streaming/ (RecordingWriterService, PlaybackController),
         #         Models/ (ScCamera, ScRecordingSegment, ScMotionEvent)
 
 frontend/
