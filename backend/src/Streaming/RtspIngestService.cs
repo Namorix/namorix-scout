@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Namorix.Scout.Hubs;
 using Namorix.Scout.Models;
 using Namorix.Scout.Persistence;
 using Namorix.Scout.Services;
@@ -9,6 +10,7 @@ public sealed class RtspIngestService(
     IDbContextFactory<ScoutDbContext> dbFactory,
     ScoutSecretProtector secretProtector,
     CameraChangeSignal changes,
+    ScoutCameraNotifier notifier,
     ILoggerFactory loggerFactory,
     ILogger<RtspIngestService> logger) : BackgroundService
 {
@@ -20,6 +22,8 @@ public sealed class RtspIngestService(
 
     private readonly Lock _gate = new();
     private readonly Dictionary<Guid, IngestEntry> _clients = new();
+    // Last state pushed to clients, so a quiet camera does not re-broadcast every tick.
+    private readonly Dictionary<Guid, CameraRuntimeState> _lastStates = new();
 
     public CameraRtspClient? GetActiveClient(Guid cameraId)
     {
@@ -97,6 +101,7 @@ public sealed class RtspIngestService(
                         var client = new CameraRtspClient(
                             camera.Id, camera.Name, camera.RtspUrl, credentials, loggerFactory);
                         _clients[camera.Id] = new IngestEntry(client, signature, camera.LastUpdatedAt);
+                        _lastStates[camera.Id] = CameraRuntimeState.Connecting;
                         client.Start();
                         logger.LogInformation("Started RTSP ingest for camera {cameraId} ({name}).",
                             camera.Id, camera.Name);
@@ -125,6 +130,26 @@ public sealed class RtspIngestService(
             {
                 logger.LogError(ex, "Failed to reconcile RTSP ingest cameras.");
             }
+
+            // Health lives here, not in the row, so this loop is what turns a stream going
+            // online or offline into a push. Clients no longer poll for it.
+            var stateChanges = new List<Guid>();
+            lock (_gate)
+            {
+                foreach (var (cameraId, entry) in _clients)
+                {
+                    var state = entry.Client.GetStatus().State;
+                    if (!_lastStates.TryGetValue(cameraId, out var previous) || previous != state)
+                        stateChanges.Add(cameraId);
+                    _lastStates[cameraId] = state;
+                }
+
+                foreach (var cameraId in _lastStates.Keys.Except(_clients.Keys).ToArray())
+                    _lastStates.Remove(cameraId);
+            }
+
+            foreach (var cameraId in stateChanges)
+                await notifier.ChangedAsync(cameraId, stoppingToken);
 
             try
             {

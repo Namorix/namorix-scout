@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Namorix.Core.Grpc;
 using Namorix.Core.Protos;
 using Namorix.Scout.Dtos;
+using Namorix.Scout.Hubs;
 using Namorix.Scout.Models;
 using Namorix.Scout.Persistence;
 using Namorix.Scout.Streaming;
@@ -12,6 +13,7 @@ public sealed class CameraService(
     IDbContextFactory<ScoutDbContext> dbFactory,
     ScoutSecretProtector secretProtector,
     CameraChangeSignal changes,
+    ScoutCameraNotifier notifier,
     RtspIngestService ingest,
     AddonChannelClient channel,
     ILogger<CameraService> logger)
@@ -72,6 +74,7 @@ public sealed class CameraService(
         db.Cameras.Add(camera);
         await db.SaveChangesAsync(ct);
         changes.Notify();
+        await notifier.ChangedAsync(camera.Id, ct);
         return ToDto(camera, CameraAccess.Owner);
     }
 
@@ -96,6 +99,7 @@ public sealed class CameraService(
         Apply(camera, request, access.Value);
         await db.SaveChangesAsync(ct);
         changes.Notify();
+        await notifier.ChangedAsync(camera.Id, ct);
         return ToDto(camera, access.Value);
     }
 
@@ -108,6 +112,7 @@ public sealed class CameraService(
         db.Cameras.Remove(camera);
         await db.SaveChangesAsync(ct);
         changes.Notify();
+        await notifier.DeletedAsync(id, ct);
         return true;
     }
 
@@ -145,7 +150,7 @@ public sealed class CameraService(
             .SingleOrDefaultAsync(s => s.CameraId == id && s.UserId == request.UserId, ct);
         if (share is null)
         {
-            share = new CameraShare
+            share = new ScCameraShare
             {
                 CameraId = id,
                 UserId = request.UserId,
@@ -157,6 +162,7 @@ public sealed class CameraService(
         share.Permission = ParsePermission(request.Permission);
         await db.SaveChangesAsync(ct);
         changes.Notify();
+        await notifier.ChangedAsync(id, ct);
 
         var names = await ResolveNamesAsync([request.UserId], ct);
         return ToShareDto(share, names);
@@ -175,6 +181,7 @@ public sealed class CameraService(
         db.CameraShares.Remove(share);
         await db.SaveChangesAsync(ct);
         changes.Notify();
+        await notifier.ChangedAsync(id, ct);
 
         // The stream needs nothing here: the row is already gone, so the viewer's next
         // playlist request no longer finds a share and 404s.
@@ -240,7 +247,7 @@ public sealed class CameraService(
         }
     }
 
-    private static CameraShareDto ToShareDto(CameraShare share, Dictionary<int, AddonUser> names) =>
+    private static CameraShareDto ToShareDto(ScCameraShare share, Dictionary<int, AddonUser> names) =>
         names.TryGetValue(share.UserId, out var user)
             ? new CameraShareDto(share.UserId, user.Username, user.Name,
                 share.Permission.ToString().ToLowerInvariant(), share.CreatedAt)

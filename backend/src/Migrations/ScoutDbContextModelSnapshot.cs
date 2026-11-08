@@ -55,7 +55,7 @@ namespace Namorix.Scout.Migrations
                     b.ToTable("Tokens");
                 });
 
-            modelBuilder.Entity("Namorix.Scout.Models.CameraShare", b =>
+            modelBuilder.Entity("Namorix.Scout.Models.ScCameraShare", b =>
                 {
                     b.Property<Guid>("CameraId")
                         .HasColumnType("TEXT");
@@ -119,7 +119,7 @@ namespace Namorix.Scout.Migrations
                     b.ToTable("Cameras");
                 });
 
-            modelBuilder.Entity("Namorix.Scout.Models.CameraShare", b =>
+            modelBuilder.Entity("Namorix.Scout.Models.ScCameraShare", b =>
                 {
                     b.HasOne("Namorix.Scout.Models.ScCamera", null)
                         .WithMany()

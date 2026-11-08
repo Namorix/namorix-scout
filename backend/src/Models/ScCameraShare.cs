@@ -5,7 +5,7 @@ namespace Namorix.Scout.Models;
 // pull: the ingest and the relay are both keyed by camera id, not by URL. It also settles the
 // question a duplicate-row design cannot answer — whose credentials the stream is dialled
 // with. The owner's, always: RtspCredentials never leave the owning row.
-public sealed class CameraShare
+public sealed class ScCameraShare
 {
     public Guid CameraId { get; set; }
     public int UserId { get; set; }

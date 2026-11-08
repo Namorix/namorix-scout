@@ -12,7 +12,7 @@ public sealed class ScoutDbContext(DbContextOptions<ScoutDbContext> options) : A
 
     // Access to a camera is ownership OR a row here, so a share decision is a lookup rather
     // than a copy of the camera.
-    public DbSet<CameraShare> CameraShares => Set<CameraShare>();
+    public DbSet<ScCameraShare> CameraShares => Set<ScCameraShare>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,7 +25,7 @@ public sealed class ScoutDbContext(DbContextOptions<ScoutDbContext> options) : A
             entity.Property(c => c.StreamType).HasConversion<string>();
         });
 
-        modelBuilder.Entity<CameraShare>(entity =>
+        modelBuilder.Entity<ScCameraShare>(entity =>
         {
             // (CameraId, UserId) is the natural key, so it is the primary key rather than a
             // surrogate plus a unique index: "one grant per user per camera" is then a shape
