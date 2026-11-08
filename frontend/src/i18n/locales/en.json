@@ -19,6 +19,8 @@
         "view": "Shared · view only"
       },
       "list": {
+        "name": "Name",
+        "loading": "Loading cameras…",
         "active": "Active",
         "status": "Status",
         "enabled": "Enabled",

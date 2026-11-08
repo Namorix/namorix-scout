@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
+import { coreConfig } from "../config/coreConfig"
 import { cameraController } from "../controllers/camera.controller"
 import { useAppDispatch, useAppSelector } from "../store/hooks"
 import { selectCameras } from "../store/selectors/cameraSelectors"
 import { cameraActions } from "../store/slices/cameraSlice"
+import { ScSignalREvent, ScSignalRGroups } from "../signalr"
 
-// Camera health lives in the ingest process, not in the row, so the list has to be re-read
-// for a failing camera to show up — and for the badge to clear once it recovers.
-const POLL_MS = 10_000
+const { useSignalR, useSignalRGroup, useSignalREvent, useSignalRStatus } =
+  coreConfig.signalRHooks
 
 export interface UseCamerasResult {
   cameras: ReturnType<typeof selectCameras>
@@ -39,14 +40,22 @@ export function useCameras(): UseCamerasResult {
     void refresh()
   }, [refresh])
 
+  // Camera health lives in the ingest process, not in the row, so the backend pushes a
+  // change event whenever a stream enters or leaves a state; there is no list poll.
+  useSignalR(true)
+  useSignalRGroup(ScSignalRGroups.Scout, true)
+  useSignalREvent(ScSignalREvent.CameraChanged, () => void refresh())
+  useSignalREvent<string>(ScSignalREvent.CameraDeleted, (cameraId) =>
+    dispatch(cameraActions.removeCamera(cameraId)),
+  )
+
+  // A reconnect may have missed pushes; the first connect is covered by the mount fetch.
+  const status = useSignalRStatus()
+  const wasConnected = useRef(false)
   useEffect(() => {
-    // A hidden tab throttles timers anyway; skipping keeps dead requests off the wire.
-    const timer = setInterval(() => {
-      if (document.hidden) return
-      void refresh()
-    }, POLL_MS)
-    return () => clearInterval(timer)
-  }, [refresh])
+    if (status === "connected" && wasConnected.current) void refresh()
+    wasConnected.current = status === "connected"
+  }, [status, refresh])
 
   return { cameras, loading, loadFailed, refresh }
 }
