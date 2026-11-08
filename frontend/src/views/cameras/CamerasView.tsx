@@ -119,7 +119,6 @@ export const CamerasView: React.FC = () => {
     {
       header: t("scout.cameras.list.url"),
       grow: 2,
-      hideBelow: "lg",
       renderCell: (camera) => camera.rtspUrl ?? t("scout.cameras.info.none"),
     },
     {
@@ -144,6 +143,7 @@ export const CamerasView: React.FC = () => {
     {
       header: t("scout.cameras.list.state"),
       renderCell: (camera) => renderStateBadge(camera.state, t),
+      hideBelow: "md",
       alignHeader: "center",
       alignCell: "center",
     },
@@ -160,7 +160,7 @@ export const CamerasView: React.FC = () => {
     },
     {
       header: t("scout.cameras.list.record"),
-      hideBelow: "md",
+      hideBelow: "lg",
       renderCell: (camera) => (
         <NmxBadge
           semantic={camera.recordEnabled ? "success" : "error"}
@@ -176,7 +176,7 @@ export const CamerasView: React.FC = () => {
     },
     {
       header: t("scout.cameras.list.retention"),
-      hideBelow: "md",
+      hideBelow: "lg",
       renderCell: (camera) => String(camera.retentionDays),
       alignHeader: "center",
       alignCell: "center",
