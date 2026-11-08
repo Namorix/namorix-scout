@@ -1,11 +1,5 @@
 @use "@namorix/styles/mixins" as *;
 
-.scout-live__container .scout-live__content {
-  overflow-y: auto;
-
-  @include scrollbar;
-}
-
 .scout-live-card {
   border-radius: var(--nmx-radius-md);
   background-color: var(--nmx-color-surface-low);
