@@ -82,10 +82,12 @@ cd frontend && pnpm docker:prod   # docker compose down && up --build
 
 `frontend/.env`: `ADDON_FRONTEND_PORT=5302`, `ADDON_BACKEND_PORT=5300`, `ADDON_HOST=http://localhost`. Dev server proxies `/.well-known` to the backend. `@namorix/ui`/`@namorix/styles` point at package **source** (`main: ./src/index.ts`) — no rebuild needed to consume new primitives.
 
-## Current Status (v0.12.0)
+## Current Status (v0.13.0)
 
 Camera live pipeline, HLS-only. Backend: session-auth skeleton (`ScoutService` gRPC ready ping, `ScoutHub` `/hubs/scout`, cookie `nmx_scout_session`) + `ScCamera` CRUD REST `/api/cameras` (cred tách userinfo, mã hoá DataProtection — không trả pass; `access` owner/manage/view, chia sẻ qua `/api/cameras/{id}/shares`) + `/api/users` (tra user qua addon channel) + ingest: `RtspIngestService` reconcile camera enabled mỗi 5s → `CameraRtspClient` (SharpRTSP) → `H264Depacketizer` (NAL frames) → `HlsPackagerRegistry`/`HlsPackager` (SharpMP4 `FragmentedMp4Builder`, ring buffer RAM) → `HlsController`: `GET /api/cameras/{id}/live.m3u8` + `init.mp4` + `seg{n}.m4s`. Frontend (`ScoutApp` bottom-nav Cameras/Live/Settings, `NmxAddonRoot` + `NmxTabProvider`, default tab `live`): tab **Cameras** = camera manager UI (`views/cameras/`, add/edit/delete `NmxAlertDialog` + info dialog + share dialog + toast); tab **Live** = chỉ xem, grid `NmxGrid` phát bằng `HlsStreamClient` (hls.js nạp động, `xhrSetup` gửi cookie phiên; chờ playlist có segment trước khi `loadSource`; watchdog `no-frames` theo `video.currentTime`) + controls kiểu YouTube + pause cờ `paused` + nút **fullscreen** (Fullscreen API áp lên container, chỉ Chrome/Android — bỏ qua iOS); Settings placeholder. Chưa làm: recording (fMP4), timeline/playback, motion.
 `HlsStreamClient` **tự retry** mọi lỗi với backoff 3s → cap 30s (nút Play reset về 0) — trước đây offline là điểm dừng, chỉ Play tay/F5 mới sống lại. `Program.cs` ghim `NMX_DATA_DIR` **tuyệt đối** trước `NmxAddonConfig.FromEnvironment()` rồi `SetCurrentDirectory` sang `data/hls`: SharpMP4 ghi file scratch vào CWD và không cho đổi đích, mà `NmxOAuth2Client.CredentialsFile` lại resolve lazy theo CWD — quên ghim là `oauth.json` rơi vào `data/hls/data/` và addon đăng ký lại mỗi boot. `HlsScratchCleanupService` dọn file scratch cũ hơn 7 ngày (quét lúc start + mỗi ngày).
+
+v0.13.0: danh sách camera (`CamerasView`) dùng `NmxDataTable` và cập nhật qua SignalR (group `scout`, event `scout:camera-changed`/`scout:camera-deleted`) — bỏ poll 10s; `useCameras` nghe event, fallback loading/error chỉ chiếm bảng khi danh sách rỗng. `CameraShare` đổi tên thành `ScCameraShare` (schema không đổi).
 
 ---
 
